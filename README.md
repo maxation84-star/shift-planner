@@ -49,8 +49,8 @@ Firebase 무료 요금제(Spark)로 충분합니다. 신용카드 필요 없습�
 
 ## 배포
 
-GitHub Pages로 자동 배포됩니다. `main`에 푸시하면 `.github/workflows/pages.yml`이 실행됩니다.
-처음 한 번은 저장소 **Settings → Pages → Source**가 **GitHub Actions**인지 확인하세요(워크플로가 자동으로 켜려고 시도합니다).
+`main`에 푸시하면 `.github/workflows/pages.yml`이 파일을 `gh-pages` 브랜치로 복사하고, GitHub Pages가 그 브랜치를 배포합니다.
+배포가 안 되면 저장소 **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: gh-pages / (root)** 로 한 번만 맞춰 주세요.
 
 ## 데이터 구조
 
