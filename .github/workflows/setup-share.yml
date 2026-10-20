@@ -2,6 +2,9 @@
 name: Setup shared storage
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['share-setup.trigger']
 permissions:
   contents: write
 jobs:
