@@ -20,10 +20,7 @@ jobs:
           echo "== try extendsclass"
           R=$(curl -sS -m 30 -w '\n%{http_code}' -X POST https://json.extendsclass.com/bin -H 'Content-Type: application/json' --data-binary @seed.json || true)
           echo "$R" | tail -1
-          ID=$(echo "$R" | head -1 | python3 -c 'import sys,json
-try:
-  print(json.load(sys.stdin).get("id",""))
-except Exception: print("")' || true)
+          ID=$(echo "$R" | head -1 | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("id",""))' 2>/dev/null || true)
           if [ -n "$ID" ]; then URL="https://json.extendsclass.com/bin/$ID"; fi
           if [ -z "$URL" ]; then
             echo "== try jsonblob"
