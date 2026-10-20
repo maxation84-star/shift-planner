@@ -345,8 +345,9 @@ function normalize(s){
   if(!out.rooms.length)out.rooms=defaultState().rooms;
   const rids=new Set(out.rooms.map(r=>r.id));
   const cutoff=Date.now()-60*86400000;
+  const pids=new Set(out.people.map(p=>p.id));
   (Array.isArray(s.requests)?s.requests:[]).forEach(q=>{
-    if(!q||!ids.has(q.pid))return;const ok=d=>!d||/^\d{4}-\d{2}-\d{2}$/.test(d);if(!ok(q.from)||!ok(q.to)||(!q.from&&!q.to))return;
+    if(!q||!pids.has(q.pid))return;const ok=d=>!d||/^\d{4}-\d{2}-\d{2}$/.test(d);if(!ok(q.from)||!ok(q.to)||(!q.from&&!q.to))return;
     const st=['pending','approved','rejected'].includes(q.status)?q.status:'pending';const t=+q.t||Date.now();
     if(st!=='pending'&&t<cutoff)return;
     out.requests.push({id:String(q.id||uid()),pid:q.pid,from:q.from||'',to:q.to||'',note:String(q.note||'').slice(0,80),status:st,t});
@@ -426,7 +427,7 @@ let quickPerson=null;
    2) 공개 웹(GitHub Pages 등)에서는 Firebase Realtime Database 주소(#db=…)로 공유
    3) 둘 다 없으면 이 기기(localStorage)에만 저장 */
 let db=null,cloudRef=null,saveTimer=null,readOnly=false,pushedOnce=false;
-let fbUrl=null,fbES=null,viewOnly=false;
+let fbUrl=null,fbES=null,viewOnly=false,fbAuto=false;
 const DB_KEY='shiftplan.db';
 let bin=null;const BIN_KEY='shiftplan.bin';let editor=false;
 function readShareHash(){
@@ -484,6 +485,12 @@ async function binSave(){
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 편집 링크로 열었는지 확인하세요.');}
 }
 async function remoteMutate(fn){
+  if(fbUrl&&!cloudRef){
+    try{const r=await fetch(fbUrl+'.json');const latest=r.ok?normalize(await r.json()):JSON.parse(JSON.stringify(state));fn(latest);
+      const w=await fetch(fbUrl+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(latest)});if(!w.ok)throw new Error(w.status);
+      state=latest;persistLocal();render();return true;}
+    catch(e){toast('서버에 보내지 못했습니다. 잠시 후 다시 시도하세요.');return false;}
+  }
   if(bin){
     try{const r=await fetch(bin.url,{cache:'no-store'});const latest=r.ok?normalize(await r.json()):JSON.parse(JSON.stringify(state));fn(latest);
       const h={'Content-Type':'application/json'};if(bin.key)h['Security-key']=bin.key;
@@ -513,7 +520,9 @@ async function initCloud(){
     if(fbUrl){initFirebase();applyViewMode();return;}
     if(bin){initBin();applyViewMode();return;}
     /* 저장소에 심어 둔 공유 주소(share.json)가 있으면 자동 연결: 기본은 보기 모드, #edit 로 연 기기만 편집 */
-    try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};if(!editor)viewOnly=readOnly=true;initBin();}}}catch(e){}
+    try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();
+      if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;if(!editor)viewOnly=readOnly=true;initFirebase();}catch(e){}}
+      else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};if(!editor)viewOnly=readOnly=true;initBin();}}}catch(e){}
     applyViewMode();return;
   }
   try{db=await window.claude.use('db');}catch(e){db=null;}
@@ -1007,9 +1016,9 @@ function openBackup(){
 function openShareSettings(){
   const base=location.href.replace(/#.*$/,'');
   const link=ro=>fbUrl?`${base}#db=${encodeURIComponent(fbUrl)}${ro?'&ro=1':''}`:bin?`${base}#bin=${encodeURIComponent(bin.url)}${ro?'&ro=1':(bin.key?'&key='+encodeURIComponent(bin.key):'')}`:'';
-  if(bin&&!fbUrl){
+  if(bin&&!fbUrl||fbAuto){
     const base2=location.href.replace(/#.*$/,'');
-    if(bin.auto){openSheet(`<h2>공유 설정</h2><div class="sub">저장소에 심어 둔 공유 주소로 자동 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
+    if(fbAuto||bin.auto){openSheet(`<h2>공유 설정</h2><div class="sub">저장소에 심어 둔 공유 주소로 자동 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
       <div class="field"><label>직원용 링크 (보기 전용)</label><input readonly value="${esc(base2)}"></div>
       <div class="field"><label>담당자용 링크 (한 번 열면 그 기기는 계속 편집 모드)</label><input readonly value="${esc(base2+'#edit')}"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn small" id="cpV">직원용 복사</button><button class="btn small" id="cpE">담당자용 복사</button></div>
