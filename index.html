@@ -299,10 +299,26 @@ function clampInt(v,lo,hi,def){v=parseInt(v,10);if(isNaN(v))return def;return Ma
 function loadLocal(){try{const raw=localStorage.getItem(STORE_KEY);if(raw)return normalize(JSON.parse(raw));}catch(e){}return null;}
 function persistLocal(){try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}}
 
+/* 11월 임시 휴무표(이름 기준). 해당 달에 입력이 없을 때 한 번만 채워 넣는다. */
+const SEED={month:"2026-11",days:{"2026-11-01":{"off":{"용태중":"off","김경숙":"off"}},"2026-11-02":{"off":{"김경숙":"off"}},"2026-11-03":{"off":{"김규선":"off","서수정":"off","김정민":"off","박태선":"off"}},"2026-11-05":{"off":{"김은정":"off"}},"2026-11-06":{"off":{"전희원":"off","허나경":"off"}},"2026-11-07":{"off":{"용태중":"off"}},"2026-11-09":{"off":{"홍기범":"off"}},"2026-11-10":{"off":{"김규선":"off","서수정":"off","김정민":"off","홍기범":"off"}},"2026-11-11":{"off":{"김정민":"off","김은정":"off","김규선":"off","용태중":"off","김경숙":"off","허나경":"off"}},"2026-11-12":{"off":{"김은정":"off","전희원":"off","김경숙":"off","허나경":"off"}},"2026-11-13":{"off":{"전희원":"off"}},"2026-11-14":{"off":{"용태중":"off","박태선":"off"}},"2026-11-15":{"off":{"용태중":"off"}},"2026-11-17":{"off":{"김규선":"off"}},"2026-11-18":{"off":{"박태선":"off"}},"2026-11-19":{"off":{"서수정":"off","김경숙":"off","용태중":"off","전희원":"off"}},"2026-11-20":{"off":{"박태선":"off"}},"2026-11-21":{"off":{"서수정":"off","김정민":"off"}},"2026-11-22":{"off":{"김경숙":"off"}},"2026-11-23":{"off":{"용태중":"off"}},"2026-11-24":{"off":{"용태중":"off"}},"2026-11-25":{"off":{"김규선":"annual","김경숙":"off"}},"2026-11-26":{"off":{"박태선":"annual"}},"2026-11-27":{"off":{"전희원":"annual"}},"2026-11-28":{"off":{"서수정":"annual","김정민":"annual"}},"2026-11-29":{"off":{"용태중":"annual"}},"2026-11-30":{"off":{"김경숙":"off"}}}};
+function applySeed(){
+  try{
+    const flag='shiftplan.seed.'+SEED.month;if(localStorage.getItem(flag))return;
+    if(Object.keys(state.days).some(k=>k.startsWith(SEED.month)))return;
+    const byName=Object.fromEntries(state.people.map(p=>[p.name,p.id]));
+    Object.keys(SEED.days).forEach(k=>{const d=JSON.parse(JSON.stringify(getDay(k)));Object.entries(SEED.days[k].off).forEach(([n,t])=>{if(byName[n])d.off[byName[n]]=t;});setDay(k,d);});
+    localStorage.setItem(flag,'1');persistLocal();
+  }catch(e){}
+}
 let state=loadLocal()||defaultState();
 if(!Object.keys(state.days).length&&state.people.length===2&&state.people.map(p=>p.name).join()==='홍기범,헌화경'){state=defaultState();persistLocal();}
 const now=new Date();
 let view={y:now.getFullYear(),m:now.getMonth()};
+function pickStartMonth(){
+  const cur=key(view.y,view.m,1).slice(0,7);const nx=new Date(view.y,view.m+1,1);const nxk=key(nx.getFullYear(),nx.getMonth(),1).slice(0,7);
+  const has=pre=>Object.keys(state.days).some(k=>k.startsWith(pre));
+  if(!has(cur)&&has(nxk))view={y:nx.getFullYear(),m:nx.getMonth()};
+}
 let quickPerson=null;
 
 /* ---------- 공유 저장 ----------
@@ -693,6 +709,7 @@ $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
 
+applySeed();pickStartMonth();
 initCloud();
 render();
 if(viewOnly){['peopleBtn','autoBtn','backupBtn'].forEach(id=>$('#'+id).hidden=true);$('#quick').hidden=true;}
