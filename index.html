@@ -327,7 +327,7 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
