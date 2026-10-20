@@ -225,10 +225,10 @@ button{cursor:pointer}
       <button class="btn small" id="todayBtn">오늘</button>
     </div>
     <div class="tools">
-      <span class="sync" id="sync"><i></i><span>이 기기에 저장</span></span>
+      <span class="sync" id="sync"><i></i><span>이 기기에만 저장</span></span>
       <button class="btn small" id="peopleBtn">👥 직원 관리</button>
       <button class="btn small" id="autoBtn">✨ 자동 배정</button>
-      <button class="btn small" id="shareBtn">📋 텍스트 복사</button>
+      <button class="btn small" id="shareBtn">📤 공유</button>
       <button class="btn small" id="backupBtn">💾 백업</button>
       <button class="btn small" id="shareSetBtn" hidden>🔗 공유 설정</button>
     </div>
@@ -297,7 +297,16 @@ function normalize(s){
 }
 function clampInt(v,lo,hi,def){v=parseInt(v,10);if(isNaN(v))return def;return Math.max(lo,Math.min(hi,v));}
 function loadLocal(){try{const raw=localStorage.getItem(STORE_KEY);if(raw)return normalize(JSON.parse(raw));}catch(e){}return null;}
-function persistLocal(){try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){}}
+const HIST_KEY='shiftplan.hist',HIST_MAX=40;
+function loadHist(){try{const a=JSON.parse(localStorage.getItem(HIST_KEY)||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}}
+function pushHist(json){
+  try{const h=loadHist();const now=Date.now();const last=h[h.length-1];
+    if(last&&last.d===json)return;
+    if(last&&now-last.t<120000)h[h.length-1]={t:now,d:json};else h.push({t:now,d:json});
+    while(h.length>HIST_MAX)h.shift();
+    localStorage.setItem(HIST_KEY,JSON.stringify(h));}catch(e){}
+}
+function persistLocal(){try{const j=JSON.stringify(state);localStorage.setItem(STORE_KEY,j);pushHist(j);}catch(e){}}
 
 /* 11월 임시 휴무표(이름 기준). 해당 달에 입력이 없을 때 한 번만 채워 넣는다. */
 const SEED={month:"2026-11",days:{"2026-11-01":{"off":{"용태중":"off","김경숙":"off"}},"2026-11-02":{"off":{"김경숙":"off"}},"2026-11-03":{"off":{"김규선":"off","서수정":"off","김정민":"off","박태선":"off"}},"2026-11-05":{"off":{"김은정":"off"}},"2026-11-06":{"off":{"전희원":"off","허나경":"off"}},"2026-11-07":{"off":{"용태중":"off"}},"2026-11-09":{"off":{"홍기범":"off"}},"2026-11-10":{"off":{"김규선":"off","서수정":"off","김정민":"off","홍기범":"off"}},"2026-11-11":{"off":{"김정민":"off","김은정":"off","김규선":"off","용태중":"off","김경숙":"off","허나경":"off"}},"2026-11-12":{"off":{"김은정":"off","전희원":"off","김경숙":"off","허나경":"off"}},"2026-11-13":{"off":{"전희원":"off"}},"2026-11-14":{"off":{"용태중":"off","박태선":"off"}},"2026-11-15":{"off":{"용태중":"off"}},"2026-11-17":{"off":{"김규선":"off"}},"2026-11-18":{"off":{"박태선":"off"}},"2026-11-19":{"off":{"서수정":"off","김경숙":"off","용태중":"off","전희원":"off"}},"2026-11-20":{"off":{"박태선":"off"}},"2026-11-21":{"off":{"서수정":"off","김정민":"off"}},"2026-11-22":{"off":{"김경숙":"off"}},"2026-11-23":{"off":{"용태중":"off"}},"2026-11-24":{"off":{"용태중":"off"}},"2026-11-25":{"off":{"김규선":"annual","김경숙":"off"}},"2026-11-26":{"off":{"박태선":"annual"}},"2026-11-27":{"off":{"전희원":"annual"}},"2026-11-28":{"off":{"서수정":"annual","김정민":"annual"}},"2026-11-29":{"off":{"용태중":"annual"}},"2026-11-30":{"off":{"김경숙":"off"}}}};
@@ -348,7 +357,7 @@ function initFirebase(){
   const apply=data=>{
     if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();}}
     else if(!pushedOnce&&!viewOnly){pushedOnce=true;cloudSave();}
-    setSync('cloud',viewOnly?'공유본 보기 전용':'공유 저장 중');
+    setSync('cloud',viewOnly?'공유본 보기 전용':'기기 + 공유 저장 중');
   };
   const refetch=()=>fetch(fbUrl+'.json').then(r=>r.ok?r.json():null).then(apply).catch(()=>{});
   try{fbES=new EventSource(fbUrl+'.json');}catch(e){setSync('local','주소 오류 · 이 기기에 저장');return;}
@@ -367,7 +376,7 @@ function applyRemote(data,label){
 async function binFetch(){
   if(!bin||binBusy)return;binBusy=true;
   try{const r=await fetch(bin.url,{cache:'no-store'});if(!r.ok)throw new Error(r.status);const data=await r.json();
-    applyRemote(data,viewOnly||!bin.key&&bin.url.includes('extendsclass')?'공유본 보기':'공유 저장 중');}
+    applyRemote(data,viewOnly||!bin.key&&bin.url.includes('extendsclass')?'공유본 보기':'기기 + 공유 저장 중');}
   catch(e){setSync('local','공유 저장소 연결 안 됨');}
   binBusy=false;
 }
@@ -379,7 +388,7 @@ function initBin(){
 async function binSave(){
   try{const h={'Content-Type':'application/json'};if(bin.key)h['Security-key']=bin.key;
     const r=await fetch(bin.url,{method:'PUT',headers:h,body:JSON.stringify(state)});
-    if(!r.ok)throw new Error(r.status);setSync('cloud','공유 저장 중');}
+    if(!r.ok)throw new Error(r.status);setSync('cloud','기기 + 공유 저장 중');}
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 편집 링크로 열었는지 확인하세요.');}
 }
 async function binCreate(){
@@ -392,7 +401,7 @@ async function binCreate(){
 }
 async function fbSave(){
   try{const r=await fetch(fbUrl+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
-    if(!r.ok)throw new Error(r.status);setSync('cloud','공유 저장 중');}
+    if(!r.ok)throw new Error(r.status);setSync('cloud','기기 + 공유 저장 중');}
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 규칙(rules)과 주소를 확인하세요.');}
 }
 function setSync(mode,text){const el=$('#sync');el.className='sync '+mode;el.querySelector('span').textContent=text;}
@@ -408,11 +417,11 @@ async function initCloud(){
       if(remote&&remote.people&&JSON.stringify(normalize(remote))!==JSON.stringify(state)){
         state=normalize(JSON.parse(JSON.stringify(remote)));persistLocal();render();
       }
-      setSync('cloud',readOnly?'공유본 보기 (읽기 전용)':'공유 저장 중');
+      setSync('cloud',readOnly?'공유본 보기 (읽기 전용)':'기기 + 공유 저장 중');
     }else if(!(snap.metadata&&snap.metadata.fromCache)&&!pushedOnce){
       pushedOnce=true;cloudSave();
     }
-  },err=>{db=null;setSync('local','이 기기에 저장');});
+  },err=>{db=null;setSync('local','이 기기에만 저장');});
 }
 function scheduleSave(){
   persistLocal();
@@ -422,11 +431,11 @@ function scheduleSave(){
 async function cloudSave(){
   if(readOnly)return;
   if(!cloudRef){if(fbUrl)fbSave();else if(bin)binSave();return;}
-  try{await cloudRef.set(JSON.parse(JSON.stringify(state)));setSync('cloud','공유 저장 중');}
+  try{await cloudRef.set(JSON.parse(JSON.stringify(state)));setSync('cloud','기기 + 공유 저장 중');}
   catch(e){
     if(e&&e.code==='invalid_argument'){readOnly=true;$('#roBanner').hidden=false;setSync('ro','읽기 전용');}
     else if(e&&e.code==='unavailable'){setTimeout(cloudSave,800+Math.random()*700);}
-    else{setSync('local','이 기기에 저장');}
+    else{setSync('local','이 기기에만 저장');}
   }
 }
 
@@ -686,13 +695,32 @@ async function copyText(text,okMsg){
     const ta=$('#copyTa');ta.focus();ta.select();$('#closeC').onclick=closeSheet;return false;
   }
 }
+function fmtTime(t){const d=new Date(t);return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;}
+function backupFile(){const name=`근무표_백업_${new Date().toISOString().slice(0,10)}.json`;return new File([JSON.stringify(state)],name,{type:'application/json'});}
 function openBackup(){
-  openSheet(`<h2>백업 · 복원</h2><div class="sub">백업 내용을 메모장이나 카톡 나에게 보내기 등에 붙여 두면, 다른 기기에서 복원할 수 있습니다.</div>
-    <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn primary" id="copyB">백업 내용 복사</button></div>
+  const inApp=!!window.claude;
+  const hist=loadHist().slice().reverse();
+  const histRows=hist.map((h,i)=>{let n=0,p=0;try{const o=JSON.parse(h.d);n=Object.values(o.days||{}).reduce((a,d)=>a+Object.keys(d.off||{}).length,0);p=(o.people||[]).length;}catch(e){}
+    return `<div class="row" style="padding:5px 0"><span style="font-variant-numeric:tabular-nums">${fmtTime(h.t)}</span><span class="msg" style="margin:0">직원 ${p}명 · 휴무 ${n}건</span><button class="btn small" style="margin-left:auto" data-h="${i}">이 시점으로 되돌리기</button></div>`;}).join('');
+  openSheet(`<h2>백업 · 복원</h2><div class="sub">달력은 바꿀 때마다 이 기기에 자동 저장되고, 아래 자동 백업 기록에도 남습니다. 파일로 저장해 두면 기기를 바꿔도 안전합니다.</div>
+    <div class="actions" style="justify-content:flex-start;margin-top:0;gap:6px">
+      ${inApp?'':'<button class="btn primary" id="fileB">📥 파일로 저장</button><button class="btn" id="fileShareB">📤 백업 파일 공유</button><label class="btn" for="fileIn">📂 파일 불러오기</label><input type="file" id="fileIn" accept=".json,application/json" hidden>'}
+      <button class="btn" id="copyB">백업 내용 복사</button></div>
+    <h3 style="font-size:13px;color:var(--muted);margin:16px 0 4px">자동 백업 기록 (최근 ${hist.length}개)</h3>
+    <div style="max-height:200px;overflow:auto;border:1px solid var(--line-soft);border-radius:8px;padding:0 10px">${histRows||'<div class="empty-note">아직 기록이 없습니다.</div>'}</div>
     <div class="field"><label for="restoreTa">복원: 백업 내용을 붙여 넣기</label><textarea id="restoreTa" placeholder='{"version":1,"people":[...],"days":{...}}'></textarea></div>
     <label class="check"><input type="checkbox" id="mergeB"> 지금 달력에 합치기 (끄면 전체를 백업 내용으로 바꿉니다)</label>
     <div class="actions"><button class="btn danger left" id="resetB">전체 초기화</button><button class="btn" id="closeB">닫기</button><button class="btn primary" id="restoreB">복원</button></div><div class="msg" id="bmsg"></div>`);
   $('#copyB').onclick=()=>copyText(JSON.stringify(state),'백업 내용을 복사했습니다');
+  const fb=$('#fileB');if(fb)fb.onclick=()=>{try{const f=backupFile();const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);toast('백업 파일을 저장했습니다');}catch(e){toast('파일 저장이 막혀 있습니다. "백업 내용 복사"를 쓰세요.');}};
+  const fs=$('#fileShareB');if(fs)fs.onclick=async()=>{const f=backupFile();
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:'근무표 백업'});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+    copyText(JSON.stringify(state),'이 기기는 파일 공유가 안 되어 백업 내용을 복사했습니다');};
+  const fi=$('#fileIn');if(fi)fi.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('#restoreTa').value=String(r.result||'');$('#bmsg').className='msg';$('#bmsg').textContent=`${f.name} 를 읽었습니다. 아래 "복원"을 누르세요.`;};r.readAsText(f);};
+  $('#sheet').querySelectorAll('button[data-h]').forEach(b=>b.onclick=()=>{
+    if(!b.dataset.arm){b.dataset.arm='1';b.textContent='정말? 한 번 더';return;}
+    try{state=normalize(JSON.parse(hist[+b.dataset.h].d));scheduleSave();render();closeSheet();toast('되돌렸습니다');}catch(e){toast('이 기록을 읽을 수 없습니다');}
+  });
   $('#closeB').onclick=closeSheet;
   $('#restoreB').onclick=()=>{
     try{const inc=normalize(JSON.parse($('#restoreTa').value));
@@ -762,7 +790,11 @@ $('#nextM').onclick=()=>{view.m++;if(view.m>11){view.m=0;view.y++;}render();};
 $('#todayBtn').onclick=()=>{view={y:now.getFullYear(),m:now.getMonth()};render();};
 $('#peopleBtn').onclick=()=>openPeople();
 $('#autoBtn').onclick=openAuto;
-$('#shareBtn').onclick=()=>copyText(monthText(),'이번 달 휴무표를 복사했습니다');
+$('#shareBtn').onclick=async()=>{
+  const text=monthText();
+  if(navigator.share&&!window.claude){try{await navigator.share({title:`${view.y}년 ${view.m+1}월 휴무표`,text});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+  copyText(text,'이번 달 휴무표를 복사했습니다');
+};
 $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
