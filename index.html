@@ -328,8 +328,11 @@ let quickPerson=null;
 let db=null,cloudRef=null,saveTimer=null,readOnly=false,pushedOnce=false;
 let fbUrl=null,fbES=null,viewOnly=false;
 const DB_KEY='shiftplan.db';
+let bin=null;const BIN_KEY='shiftplan.bin';
 function readShareHash(){
-  const h=location.hash||'';const m=h.match(/[#&]db=([^&]+)/);
+  const h=location.hash||'';const m=h.match(/[#&]db=([^&]+)/);const b=h.match(/[#&]bin=([^&]+)/);const kk=h.match(/[#&]key=([^&]+)/);
+  if(b){try{bin={url:decodeURIComponent(b[1]),key:kk?decodeURIComponent(kk[1]):''};if(!/^https:\/\/(json\.extendsclass\.com\/bin\/|jsonblob\.com\/api\/jsonBlob\/)[A-Za-z0-9-]+$/.test(bin.url))bin=null;else localStorage.setItem(BIN_KEY,JSON.stringify(bin));}catch(e){bin=null;}}
+  else{try{bin=JSON.parse(localStorage.getItem(BIN_KEY)||'null');}catch(e){bin=null;}}
   if(m){try{fbUrl=cleanDbUrl(decodeURIComponent(m[1]));localStorage.setItem(DB_KEY,fbUrl);}catch(e){}}
   else{try{fbUrl=localStorage.getItem(DB_KEY)||null;}catch(e){}}
   viewOnly=/[#&]ro=1/.test(h);
@@ -355,6 +358,38 @@ function initFirebase(){
   fbES.onerror=()=>setSync('local','연결 끊김 · 다시 연결 중');
   setSync('cloud','공유 저장소 연결 중');
 }
+/* 계정 없는 공유 저장소: JSON bin (extendsclass / jsonblob). GET 폴링 + PUT */
+let binTimer=null,binBusy=false;
+function applyRemote(data,label){
+  if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();}}
+  setSync('cloud',label);
+}
+async function binFetch(){
+  if(!bin||binBusy)return;binBusy=true;
+  try{const r=await fetch(bin.url,{cache:'no-store'});if(!r.ok)throw new Error(r.status);const data=await r.json();
+    applyRemote(data,viewOnly||!bin.key&&bin.url.includes('extendsclass')?'공유본 보기':'공유 저장 중');}
+  catch(e){setSync('local','공유 저장소 연결 안 됨');}
+  binBusy=false;
+}
+function initBin(){
+  if(!bin)return;
+  binFetch();binTimer=setInterval(binFetch,15000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')binFetch();});
+}
+async function binSave(){
+  try{const h={'Content-Type':'application/json'};if(bin.key)h['Security-key']=bin.key;
+    const r=await fetch(bin.url,{method:'PUT',headers:h,body:JSON.stringify(state)});
+    if(!r.ok)throw new Error(r.status);setSync('cloud','공유 저장 중');}
+  catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 편집 링크로 열었는지 확인하세요.');}
+}
+async function binCreate(){
+  const body=JSON.stringify(state);const key=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+  try{const r=await fetch('https://json.extendsclass.com/bin',{method:'POST',headers:{'Content-Type':'application/json','Security-key':key},body});
+    const j=await r.json();if(r.ok&&j&&j.id)return {url:'https://json.extendsclass.com/bin/'+j.id,key};}catch(e){}
+  try{const r=await fetch('https://jsonblob.com/api/jsonBlob',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body});
+    const loc=r.headers.get('Location')||'';const id=(loc.match(/jsonBlob\/([A-Za-z0-9-]+)/)||[])[1];if(r.ok&&id)return {url:'https://jsonblob.com/api/jsonBlob/'+id,key:''};}catch(e){}
+  return null;
+}
 async function fbSave(){
   try{const r=await fetch(fbUrl+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
     if(!r.ok)throw new Error(r.status);setSync('cloud','공유 저장 중');}
@@ -362,7 +397,7 @@ async function fbSave(){
 }
 function setSync(mode,text){const el=$('#sync');el.className='sync '+mode;el.querySelector('span').textContent=text;}
 async function initCloud(){
-  if(!(window.claude&&typeof window.claude.use==='function')){readShareHash();$('#shareSetBtn').hidden=false;initFirebase();return;}
+  if(!(window.claude&&typeof window.claude.use==='function')){readShareHash();$('#shareSetBtn').hidden=false;if(fbUrl)initFirebase();else initBin();return;}
   try{db=await window.claude.use('db');}catch(e){db=null;}
   if(!db)return;
   try{cloudRef=db.doc('schedule/main');}catch(e){db=null;return;}
@@ -381,12 +416,12 @@ async function initCloud(){
 }
 function scheduleSave(){
   persistLocal();
-  if(!(db||fbUrl)||readOnly)return;
+  if(!(db||fbUrl||bin)||readOnly)return;
   clearTimeout(saveTimer);saveTimer=setTimeout(cloudSave,500);
 }
 async function cloudSave(){
   if(readOnly)return;
-  if(!cloudRef){if(fbUrl)fbSave();return;}
+  if(!cloudRef){if(fbUrl)fbSave();else if(bin)binSave();return;}
   try{await cloudRef.set(JSON.parse(JSON.stringify(state)));setSync('cloud','공유 저장 중');}
   catch(e){
     if(e&&e.code==='invalid_argument'){readOnly=true;$('#roBanner').hidden=false;setSync('ro','읽기 전용');}
@@ -677,8 +712,24 @@ function openBackup(){
 
 function openShareSettings(){
   const base=location.href.replace(/#.*$/,'');
-  const link=ro=>fbUrl?`${base}#db=${encodeURIComponent(fbUrl)}${ro?'&ro=1':''}`:'';
-  openSheet(`<h2>공유 설정</h2><div class="sub">Firebase 실시간 DB 주소를 넣으면 이 주소를 아는 모든 사람이 같은 달력을 봅니다. 설정 방법은 README에 있습니다.</div>
+  const link=ro=>fbUrl?`${base}#db=${encodeURIComponent(fbUrl)}${ro?'&ro=1':''}`:bin?`${base}#bin=${encodeURIComponent(bin.url)}${ro?'&ro=1':(bin.key?'&key='+encodeURIComponent(bin.key):'')}`:'';
+  if(bin&&!fbUrl){
+    openSheet(`<h2>공유 설정</h2><div class="sub">계정 없는 공유 저장소에 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
+      <div class="field"><label>편집 링크 (입력 담당자에게)</label><input readonly id="linkEdit" value="${esc(link(false))}"></div>
+      <div class="field"><label>보기 전용 링크 (직원들에게)</label><input readonly id="linkView" value="${esc(link(true))}"></div>
+      <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn small" id="cpEdit">편집 링크 복사</button><button class="btn small" id="cpView">보기 링크 복사</button></div>
+      <div class="msg">${bin.key?'보기 링크로는 저장이 되지 않습니다(쓰기 키가 없음).':'이 저장소는 링크를 아는 사람이면 누구나 고칠 수 있습니다.'} 무료 외부 서비스라 오래 안 쓰면 지워질 수 있으니 월말마다 "백업"을 눌러 두세요.</div>
+      <div class="actions"><button class="btn danger left" id="dbOff">공유 끊기</button><button class="btn primary" id="dbClose">닫기</button></div>`);
+    $('#dbClose').onclick=closeSheet;
+    $('#cpEdit').onclick=()=>copyText(link(false),'편집 링크를 복사했습니다');
+    $('#cpView').onclick=()=>copyText(link(true),'보기 전용 링크를 복사했습니다');
+    $('#dbOff').onclick=()=>{try{localStorage.removeItem(BIN_KEY);}catch(e){}location.hash='';location.reload();};
+    return;
+  }
+  openSheet(`<h2>공유 설정</h2>
+    ${fbUrl?'':`<div class="sub">가장 쉬운 방법: 아래 버튼 하나로 계정 없이 공유 저장소를 만듭니다. 지금 달력 내용이 그대로 올라갑니다.</div>
+    <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn primary" id="binStart">계정 없이 공유 시작</button></div><div class="msg" id="binMsg"></div>
+    <div class="sub" style="margin-top:14px">또는 Firebase 실시간 DB 주소를 넣습니다(더 안정적, README 참고).</div>`}
     <div class="field"><label for="dbIn">공유 저장소 주소 (Firebase Realtime Database URL + 경로)</label><input id="dbIn" value="${esc(fbUrl||'')}" placeholder="https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app/boards/우리가게"></div>
     <div class="msg" id="dbMsg"></div>
     ${fbUrl?`<div class="field"><label>편집 링크 (입력 담당자에게)</label><input readonly id="linkEdit" value="${esc(link(false))}"></div>
@@ -687,6 +738,13 @@ function openShareSettings(){
     <div class="msg">보기 전용은 화면에서 입력만 막는 것이라, 편집 링크를 아는 사람은 누구나 고칠 수 있습니다.</div>`:''}
     <div class="actions">${fbUrl?'<button class="btn danger left" id="dbOff">공유 끊기</button>':''}<button class="btn" id="dbClose">닫기</button><button class="btn primary" id="dbSave">연결</button></div>`);
   $('#dbClose').onclick=closeSheet;
+  const bs=$('#binStart');if(bs)bs.onclick=async()=>{
+    bs.disabled=true;bs.textContent='만드는 중…';$('#binMsg').className='msg';$('#binMsg').textContent='';
+    const made=await binCreate();
+    if(!made){bs.disabled=false;bs.textContent='계정 없이 공유 시작';$('#binMsg').className='msg bad';$('#binMsg').textContent='저장소를 만들지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 보세요. 계속 안 되면 Firebase 방식을 쓰세요.';return;}
+    try{localStorage.setItem(BIN_KEY,JSON.stringify(made));}catch(e){}
+    location.hash='bin='+encodeURIComponent(made.url)+(made.key?'&key='+encodeURIComponent(made.key):'');location.reload();
+  };
   $('#dbSave').onclick=()=>{
     try{const u=cleanDbUrl($('#dbIn').value);localStorage.setItem(DB_KEY,u);location.hash='db='+encodeURIComponent(u);location.reload();}
     catch(e){$('#dbMsg').className='msg bad';$('#dbMsg').textContent='주소 형식이 맞지 않습니다. https://…firebasedatabase.app/경로 또는 …firebaseio.com/경로 형태여야 합니다.';}
