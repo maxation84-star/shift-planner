@@ -469,7 +469,7 @@ async function binFetch(){
   if(!bin||binBusy)return;binBusy=true;
   try{const r=await fetch(bin.url,{cache:'no-store'});if(!r.ok)throw new Error(r.status);const data=await r.json();
     applyRemote(data,viewOnly||!bin.key&&bin.url.includes('extendsclass')?'공유본 보기':'기기 + 공유 저장 중');}
-  catch(e){setSync('local','공유 저장소 연결 안 됨');}
+  catch(e){console.warn('binFetch',e);setSync('local','공유 저장소 연결 안 됨');}
   binBusy=false;
 }
 function initBin(){
