@@ -23,6 +23,7 @@
   --sun:#c8322b; --sat:#2b5fb8; --today:#fff4d6;
   --tag-stay:#6b4fbb; --tag-work:#d9731a; --tag-empty:#6f7c92;
   --ok:#2a8f5a; --warn:#c77d05; --bad:#c8322b;
+  --bk-multi:#f9c3c3; --bk-single:#ffffff; --bk-line:#c9d1dc;
   --font-body:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
   --font-display:'Gowun Batang','Apple SD Gothic Neo','Malgun Gothic',serif;
   --shadow:0 10px 30px rgba(23,32,51,.14);
@@ -34,6 +35,7 @@
     --line:#2b3645; --line-soft:#222c3a; --accent:#63a9dc; --accent-ink:#0f141c; --accent-soft:#1d3347;
     --sun:#ff8078; --sat:#88b0f2; --today:#3a3320; --tag-stay:#a48cf0; --tag-work:#f0a35a; --tag-empty:#9aa7ba;
     --ok:#4fc585; --warn:#f0b43a; --bad:#ff8078; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
+    --bk-multi:#f0a8a8; --bk-single:#e6eaf1; --bk-line:#5a6676;
   }
 }
 :root[data-theme="dark"]{
@@ -41,6 +43,7 @@
   --line:#2b3645; --line-soft:#222c3a; --accent:#63a9dc; --accent-ink:#0f141c; --accent-soft:#1d3347;
   --sun:#ff8078; --sat:#88b0f2; --today:#3a3320; --tag-stay:#a48cf0; --tag-work:#f0a35a; --tag-empty:#9aa7ba;
   --ok:#4fc585; --warn:#f0b43a; --bad:#ff8078; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
+  --bk-multi:#f0a8a8; --bk-single:#e6eaf1; --bk-line:#5a6676;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -106,11 +109,13 @@ button{cursor:pointer}
 .lb.out{right:52%;border-radius:0 7px 7px 0}
 .lb.in.out{right:52%;border-radius:7px}
 .lb.in.half{left:50%}
-.lb.vac{left:3px;right:3px;border-radius:4px;background:repeating-linear-gradient(45deg,var(--line) 0 3px,transparent 3px 6px)}
+.lb.vac{display:none}
+.lb.multi{background:var(--bk-multi)}
+.lb.single{background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line)}
 .lb.work{left:3px;right:3px;border-radius:4px;background:repeating-linear-gradient(-45deg,var(--tag-work) 0 4px,rgba(217,115,26,.35) 4px 8px);color:#1f2430}
 .lb.work.in{left:3px;border-radius:7px 0 0 7px;right:0}
 .lb.work.out{right:52%}
-.cell.today .lb.vac{background:repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 3px,transparent 3px 6px)}
+.lane{border-bottom:1px dotted var(--line-soft)}
 .cell{background:var(--paper);min-height:98px;padding:5px 5px 6px;display:flex;flex-direction:column;gap:3px;text-align:left;border:0;position:relative;min-width:0;transition:background .12s}
 .cell:hover{background:var(--paper-2)}
 .cell.out{background:var(--paper-2);color:var(--muted);opacity:.55}
@@ -271,7 +276,7 @@ button{cursor:pointer}
       <div class="cal-head"><div class="d0">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="d6">토</div></div>
       <div class="cal" id="cal" role="grid"></div>
       <div class="legend">
-        <span><i class="sw stay"></i>입실 → 연박으로 이어짐 (퇴실일은 반칸)</span><span><i class="sw empty"></i>공실</span><span><i class="sw work"></i>공사</span>
+        <span><i class="sw" style="background:var(--bk-multi);border-radius:6px 0 0 6px;width:18px"></i>연박</span><span><i class="sw" style="background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line);border-radius:6px 0 0 6px;width:18px"></i>단박</span><span>빈칸 = 공실 (퇴실일은 반칸)</span><span><i class="sw work"></i>공사</span>
         <span><i class="sw sol"></i>휴무</span><span><i class="sw ann"></i>연차</span><span><i class="sw ext"></i>추가휴무</span>
         <span>날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다</span>
       </div>
@@ -350,8 +355,19 @@ function persistLocal(){try{const j=JSON.stringify(state);localStorage.setItem(S
 
 /* 11월 임시 휴무표(이름 기준). 해당 달에 입력이 없을 때 한 번만 채워 넣는다. */
 const SEED={month:"2026-11",days:{"2026-11-01":{"off":{"용태중":"off","김경숙":"off"}},"2026-11-02":{"off":{"김경숙":"off"}},"2026-11-03":{"off":{"김규선":"off","서수정":"off","김정민":"off","박태선":"off"}},"2026-11-05":{"off":{"김은정":"off"}},"2026-11-06":{"off":{"전희원":"off","허나경":"off"}},"2026-11-07":{"off":{"용태중":"off"}},"2026-11-09":{"off":{"홍기범":"off"}},"2026-11-10":{"off":{"김규선":"off","서수정":"off","김정민":"off","홍기범":"off"}},"2026-11-11":{"off":{"김정민":"off","김은정":"off","김규선":"off","용태중":"off","김경숙":"off","허나경":"off"}},"2026-11-12":{"off":{"김은정":"off","전희원":"off","김경숙":"off","허나경":"off"}},"2026-11-13":{"off":{"전희원":"off"}},"2026-11-14":{"off":{"용태중":"off","박태선":"off"}},"2026-11-15":{"off":{"용태중":"off"}},"2026-11-17":{"off":{"김규선":"off"}},"2026-11-18":{"off":{"박태선":"off"}},"2026-11-19":{"off":{"서수정":"off","김경숙":"off","용태중":"off","전희원":"off"}},"2026-11-20":{"off":{"박태선":"off"}},"2026-11-21":{"off":{"서수정":"off","김정민":"off"}},"2026-11-22":{"off":{"김경숙":"off"}},"2026-11-23":{"off":{"용태중":"off"}},"2026-11-24":{"off":{"용태중":"off"}},"2026-11-25":{"off":{"김규선":"annual","김경숙":"off"}},"2026-11-26":{"off":{"박태선":"annual"}},"2026-11-27":{"off":{"전희원":"annual"}},"2026-11-28":{"off":{"서수정":"annual","김정민":"annual"}},"2026-11-29":{"off":{"용태중":"annual"}},"2026-11-30":{"off":{"김경숙":"off"}}}};
+SEED.bookings=[
+  {room:'다락',start:'2026-10-31',nights:1,label:'배**'},{room:'다락',start:'2026-11-01',nights:1,label:'홍**'},{room:'다락',start:'2026-11-02',nights:2,label:'곽**'},
+  {room:'첨벙',start:'2026-10-30',nights:2,label:'최**'},{room:'첨벙',start:'2026-11-01',nights:1,label:'강**'},{room:'첨벙',start:'2026-11-02',nights:1,label:'권**'},
+  {room:'모닥',start:'2026-10-31',nights:2,label:'박**'},{room:'모닥',start:'2026-11-02',nights:2,label:'김**'},
+  {room:'노지',start:'2026-10-31',nights:1,label:'송**'},{room:'노지',start:'2026-11-01',nights:1,label:'오**'},{room:'노지',start:'2026-11-03',nights:1,label:'김**'}];
 function applySeed(){
   try{
+    const bflag='shiftplan.seed.bookings.'+SEED.month;
+    if(!localStorage.getItem(bflag)&&!state.bookings.length){
+      const byRoom=Object.fromEntries(state.rooms.map(r=>[r.name,r.id]));
+      SEED.bookings.forEach(b=>{if(byRoom[b.room])state.bookings.push({id:uid(),room:byRoom[b.room],start:b.start,nights:b.nights,kind:'stay',label:b.label});});
+      localStorage.setItem(bflag,'1');persistLocal();
+    }
     const flag='shiftplan.seed.'+SEED.month;if(localStorage.getItem(flag))return;
     if(Object.keys(state.days).some(k=>k.startsWith(SEED.month)))return;
     const byName=Object.fromEntries(state.people.map(p=>[p.name,p.id]));
@@ -543,7 +559,7 @@ function renderCal(){
   const people=Object.fromEntries(state.people.map(p=>[p.id,p]));
   cells.forEach((c,i)=>{
     const wd=i%7;
-    if(wd===0){const lab=document.createElement('div');lab.className='rlab';lab.innerHTML=state.rooms.map(r=>`<div title="${esc(r.name)}"><span class="long">${esc(r.name)}</span><span class="short">${esc(r.name.slice(0,1))}</span></div>`).join('');cal.appendChild(lab);}
+    if(wd===0){const lab=document.createElement('div');lab.className='rlab';lab.innerHTML=state.rooms.map(r=>`<div title="${esc(r.name)}" style="border-left:3px solid ${r.color};padding-left:2px"><span class="long">${esc(r.name)}</span><span class="short">${esc(r.name.slice(0,1))}</span></div>`).join('');cal.appendChild(lab);}
     const el=document.createElement('button');
     el.className='cell d'+wd+(c.out?' out':'');
     if(c.out){el.innerHTML=`<span class="num">${c.d}</span>`;el.disabled=true;cal.appendChild(el);return;}
@@ -552,10 +568,11 @@ function renderCal(){
     el.setAttribute('aria-label',`${m+1}월 ${c.d}일 ${DOW[wd]}요일`);
     let html=`<span class="num">${c.d}</span>`;
     html+='<span class="lanes">'+state.rooms.map(r=>{const {cover,out}=laneState(r.id,k);let b='';
-      if(out)b+=`<span class="lb out${out.kind==='work'?' work':''}" style="--rc:${out.color||r.color}"></span>`;
-      if(cover){const isIn=cover.start===k;const cls=(cover.kind==='work'?'work':'')+(isIn?' in':'')+(isIn&&out?' half':'')+(bookingEnd(cover)===addDays(k,1)&&false?'':'');
+      const kindCls=x=>x.kind==='work'?'work':(x.nights>=2?'multi':'single');
+      if(out)b+=`<span class="lb out ${kindCls(out)}"></span>`;
+      if(cover){const isIn=cover.start===k;const cls=kindCls(cover)+(isIn?' in':'')+(isIn&&out?' half':'');
         const txt=isIn?`${esc(cover.label||(cover.kind==='work'?'공사':'입실'))} ${cover.nights}박`:'';
-        b+=`<span class="lb ${cls}" style="--rc:${r.color}">${cover.kind==='work'&&!isIn?'':txt}</span>`;}
+        b+=`<span class="lb ${cls}">${cover.kind==='work'&&!isIn?'':txt}</span>`;}
       else if(!out)b+=`<span class="lb vac"></span>`;
       return `<span class="lane">${b}</span>`;}).join('')+'</span>';
     if(day.memo)html+=`<span class="memo">${esc(day.memo)}</span>`;
@@ -964,7 +981,7 @@ async function renderCalendarImage(){
   let yy=top;
   for(let w=0;w<weeks;w++){const rh=rowsInfo[w].h;
     ctx.fillStyle='#f4f6f9';ctx.fillRect(M,yy,LW,rh);ctx.strokeRect(M+.5,yy+.5,LW,rh);
-    ctx.fillStyle=MUTED;ctx.font='bold 11px '+font;state.rooms.forEach((r,ri)=>{let nm=r.name;while(ctx.measureText(nm).width>LW-6&&nm.length>1)nm=nm.slice(0,-1);ctx.fillText(nm,M+4,yy+36+ri*(LH+3)+13);});
+    state.rooms.forEach((r,ri)=>{ctx.fillStyle=r.color;ctx.fillRect(M+2,yy+36+ri*(LH+3),3,LH);ctx.fillStyle=MUTED;ctx.font='bold 11px '+font;let nm=r.name;while(ctx.measureText(nm).width>LW-10&&nm.length>1)nm=nm.slice(0,-1);ctx.fillText(nm,M+8,yy+36+ri*(LH+3)+13);});
     for(let c=0;c<7;c++){const x=M+LW+cw*c;const d=w*7+c-first+1;
       ctx.fillStyle=(d<1||d>n)?'#f4f6f9':'#ffffff';ctx.fillRect(x,yy,cw,rh);ctx.strokeRect(x+.5,yy+.5,cw,rh);
       if(d<1||d>n)continue;
@@ -973,11 +990,12 @@ async function renderCalendarImage(){
       ctx.fillStyle=c===0?SUN:c===6?SAT:INK;ctx.font='bold 17px '+font;ctx.fillText(String(d),x+8,cy+17);cy+=28;
       state.rooms.forEach(r=>{const {cover,out}=laneState(r.id,k);const lx=x+1,lw=cw-2;
         const hatch=(bx,bw,col)=>{ctx.save();rr(ctx,bx,cy,bw,LH,4);ctx.clip();ctx.strokeStyle=col;ctx.lineWidth=2;for(let i=-LH;i<bw+LH;i+=7){ctx.beginPath();ctx.moveTo(bx+i,cy+LH);ctx.lineTo(bx+i+LH,cy);ctx.stroke();}ctx.restore();};
-        if(out){if(out.kind==='work')hatch(lx,lw*0.48,TAGC.work);else{ctx.fillStyle=r.color;ctx.fillRect(lx,cy,lw*0.48-4,LH);rr(ctx,lx+lw*0.48-12,cy,12,LH,6);ctx.fill();}}
+        const fillB=(b,bx,bw,round)=>{const multi=b.nights>=2;ctx.save();ctx.beginPath();ctx.rect(bx,cy,bw,LH);ctx.clip();ctx.fillStyle=multi?'#f9c3c3':'#ffffff';if(round)rr(ctx,bx,cy,bw+8,LH,7);else ctx.beginPath(),ctx.rect(bx-8,cy,bw+16,LH);ctx.fill();if(!multi){ctx.strokeStyle='#c9d1dc';ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();};
+        if(out){if(out.kind==='work')hatch(lx,lw*0.48,TAGC.work);else{ctx.save();ctx.beginPath();ctx.rect(lx,cy,lw*0.48,LH);ctx.clip();ctx.fillStyle=out.nights>=2?'#f9c3c3':'#ffffff';rr(ctx,lx-10,cy,lw*0.48+10,LH,7);ctx.fill();if(out.nights<2){ctx.strokeStyle='#c9d1dc';ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();}}
         if(cover){const isIn=cover.start===k;const bx=isIn?(out?lx+lw*0.5:lx+3):lx;const bw=isIn?(lx+lw-bx):lw;
-          if(cover.kind==='work'){hatch(bx,bw,TAGC.work);}else{ctx.fillStyle=r.color;if(isIn){rr(ctx,bx,cy,bw+8,LH,7);ctx.save();ctx.beginPath();ctx.rect(bx,cy,bw,LH);ctx.clip();ctx.fill();ctx.restore();}else ctx.fillRect(bx,cy,bw,LH);}
+          if(cover.kind==='work'){hatch(bx,bw,TAGC.work);}else fillB(cover,bx,bw,isIn);
           if(isIn){ctx.fillStyle=INK;ctx.font='bold 11px '+font;let t=`${cover.label||(cover.kind==='work'?'공사':'입실')} ${cover.nights}박`;while(ctx.measureText(t).width>bw-10&&t.length>1)t=t.slice(0,-1);ctx.fillText(t,bx+6,cy+13);}}
-        else if(!out){hatch(lx+3,lw-6,LINE);}
+        else if(!out){ctx.save();ctx.strokeStyle='#eef1f5';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx+2,cy+LH);ctx.lineTo(lx+lw-2,cy+LH);ctx.stroke();ctx.restore();}
         cy+=LH+3;});
       cy+=6;
       if(day.memo){ctx.fillStyle=MUTED;ctx.font='12px '+font;let memo=day.memo;while(ctx.measureText(memo).width>cw-12&&memo.length>1)memo=memo.slice(0,-1);ctx.fillText(memo,x+6,cy+13);cy+=20;}
@@ -996,7 +1014,7 @@ async function renderCalendarImage(){
     ctx.fillStyle=r.p.color;rr(ctx,x,ty-13,16,16,8);ctx.fill();
     ctx.fillStyle=INK;ctx.font='bold 14px '+font;ctx.fillText(r.p.name,x+24,ty);
     ctx.fillStyle=MUTED;ctx.font='13px '+font;ctx.fillText(`${WORK[r.p.work].label} · 휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}${r.offLeft>0?` · ${r.offLeft}일 남음`:''}`,x+24+ctx.measureText(r.p.name).width+28,ty);});
-  yy+=sumRows*30+28;ctx.fillStyle=MUTED;ctx.font='12px '+font;ctx.fillText('객실 띠: 색 막대 = 입실·연박(퇴실일은 반칸) · 회색 빗금 = 공실 · 주황 빗금 = 공사   |   직원: 색 채움 = 휴무 · 테두리 = 연차 · 점선 = 추가휴무',M,yy);
+  yy+=sumRows*30+28;ctx.fillStyle=MUTED;ctx.font='12px '+font;ctx.fillText('객실 띠: 빨강 = 연박 · 흰색 = 단박 · 빈칸 = 공실 (퇴실일은 반칸) · 주황 빗금 = 공사   |   직원: 색 채움 = 휴무 · 테두리 = 연차 · 점선 = 추가휴무',M,yy);
   return new Promise(res=>cv.toBlob(b=>res(b),'image/png'));
 }
 async function openImage(){
