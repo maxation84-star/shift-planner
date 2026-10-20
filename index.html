@@ -125,6 +125,11 @@ button{cursor:pointer}
 .offs{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:auto}
 .chip{font-size:11px;font-weight:600;padding:2px 6px;border-radius:5px;color:#1f2430;background:var(--pc);line-height:1.35;display:flex;align-items:center;gap:4px;min-width:0}
 .chip .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip[data-pid],.pchip{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+.chip.dragging{opacity:.35}
+.ghost{position:fixed;z-index:70;pointer-events:none;transform:translate(-50%,-120%);box-shadow:var(--shadow);font-size:13px;padding:5px 10px}
+.cell.drop{outline:3px solid var(--accent);outline-offset:-3px;background:var(--accent-soft)}
+.cell.drop-del{outline:3px dashed var(--bad);outline-offset:-3px}
 .chip .k{margin-left:auto;font-size:9px;background:rgba(0,0,0,.12);padding:0 4px;border-radius:3px;flex:none}
 .chip.annual{background:transparent;color:var(--ink);border:2px solid var(--pc)}
 .chip.annual .k{background:var(--pc);color:#1f2430}
@@ -216,10 +221,10 @@ button{cursor:pointer}
   .month-nav h2{font-size:19px;min-width:7.5em}
 }
 @media(max-width:560px){
-  :root{--labw:16px;--laneh:9px}
+  :root{--labw:16px;--laneh:12px}
   .rlab{padding:22px 0 0 1px;font-size:8px}
   .rlab .long{display:none} .rlab .short{display:block}
-  .bar{font-size:0}
+  .lb{font-size:8px;padding-left:3px;letter-spacing:-.02em}
   .offs{grid-template-columns:1fr}
   .cell{min-height:74px;padding:3px 3px 4px}
   .cell .num{font-size:12px}
@@ -268,7 +273,7 @@ button{cursor:pointer}
       <div class="legend">
         <span><i class="sw stay"></i>입실 → 연박으로 이어짐 (퇴실일은 반칸)</span><span><i class="sw empty"></i>공실</span><span><i class="sw work"></i>공사</span>
         <span><i class="sw sol"></i>휴무</span><span><i class="sw ann"></i>연차</span><span><i class="sw ext"></i>추가휴무</span>
-        <span>날짜를 누르면 입실·휴무 입력 · 위의 이름을 고르면 탭으로 바로 입력</span>
+        <span>날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다</span>
       </div>
     </section>
     <aside class="side" id="side"></aside>
@@ -518,11 +523,12 @@ function renderQuick(){
   state.people.forEach(p=>{
     const b=document.createElement('button');b.className='pchip'+(quickPerson===p.id?' on':'');b.style.setProperty('--pc',p.color);
     b.innerHTML=`<span class="dot"></span>${esc(p.name)}`;
-    b.onclick=()=>{quickPerson=quickPerson===p.id?null:p.id;renderQuick();$('#cal').classList.toggle('quick',!!quickPerson);};
+    b.onclick=()=>{if(suppressClick)return;quickPerson=quickPerson===p.id?null:p.id;renderQuick();$('#cal').classList.toggle('quick',!!quickPerson);};
+    b.addEventListener('pointerdown',e=>startDrag(e,p.id,'off',null,b));
     q.appendChild(b);
   });
   const h=document.createElement('span');h.className='hint';
-  h.textContent=quickPerson?`날짜를 탭할 때마다 휴무 → 연차 → 추가 → 근무 순으로 바뀝니다`:'이름을 고르면 날짜 탭만으로 입력됩니다';
+  h.textContent=quickPerson?`날짜를 탭할 때마다 휴무 → 연차 → 추가 → 근무 순으로 바뀝니다`:'이름을 고르면 날짜 탭만으로 입력 · 이름을 끌어 날짜에 놓아도 됩니다';
   q.appendChild(h);
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -554,12 +560,55 @@ function renderCal(){
       return `<span class="lane">${b}</span>`;}).join('')+'</span>';
     if(day.memo)html+=`<span class="memo">${esc(day.memo)}</span>`;
     const offs=state.people.filter(p=>day.off[p.id]);
-    if(offs.length){html+='<span class="offs">'+offs.map(p=>{const t=day.off[p.id];return `<span class="chip ${t}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span>${t!=='off'?`<span class="k">${TYPES[t]}</span>`:''}</span>`;}).join('')+'</span>';}
+    if(offs.length){html+='<span class="offs">'+offs.map(p=>{const t=day.off[p.id];return `<span class="chip ${t}" data-pid="${p.id}" data-t="${t}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span>${t!=='off'?`<span class="k">${TYPES[t]}</span>`:''}</span>`;}).join('')+'</span>';}
     el.innerHTML=html;
-    el.onclick=()=>{ if(quickPerson&&people[quickPerson])cycle(k,quickPerson); else openDay(k); };
+    el.dataset.k=k;
+    el.onclick=()=>{ if(suppressClick)return; if(quickPerson&&people[quickPerson])cycle(k,quickPerson); else openDay(k); };
+    el.querySelectorAll('.chip[data-pid]').forEach(ch=>ch.addEventListener('pointerdown',e=>startDrag(e,ch.dataset.pid,ch.dataset.t,k,ch)));
     cal.appendChild(el);
   });
 }
+/* ---------- 끌어서 옮기기 (마우스·터치) ---------- */
+let drag=null,suppressClick=false;
+function startDrag(e,pid,type,from,el){
+  if(viewOnly||e.button>0)return;
+  drag={pid,type,from,el,x:e.clientX,y:e.clientY,moved:false,ghost:null,over:null};
+  try{el.setPointerCapture(e.pointerId);}catch(x){}
+}
+function dragTarget(d,x,y){
+  const g=d.ghost;if(g)g.hidden=true;
+  const t=document.elementFromPoint(x,y);if(g)g.hidden=false;
+  if(!t)return null;const cell=t.closest('.cell');
+  return cell&&cell.dataset.k?cell:null;
+}
+document.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  if(!drag.moved){if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<7)return;
+    drag.moved=true;const p=state.people.find(x=>x.id===drag.pid);
+    const g=document.createElement('span');g.className='chip ghost '+drag.type;g.style.setProperty('--pc',p?p.color:'#ccc');g.textContent=(p?p.name:'')+(drag.type==='off'?'':' '+TYPES[drag.type]);document.body.appendChild(g);drag.ghost=g;
+    if(drag.from)drag.el.classList.add('dragging');}
+  drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';
+  const cell=dragTarget(drag,e.clientX,e.clientY);
+  if(drag.over&&drag.over!==cell)drag.over.classList.remove('drop');
+  if(cell&&cell.dataset.k!==drag.from)cell.classList.add('drop');
+  drag.over=cell;
+  e.preventDefault();
+},{passive:false});
+function endDrag(e,cancel){
+  if(!drag)return;const d=drag;drag=null;
+  if(d.ghost)d.ghost.remove();if(d.over)d.over.classList.remove('drop');d.el.classList.remove('dragging');
+  if(!d.moved)return;
+  suppressClick=true;setTimeout(()=>suppressClick=false,350);
+  if(cancel)return;
+  const cell=dragTarget(d,e.clientX,e.clientY);
+  if(!cell){ if(d.from){changeDay(d.from,dd=>{delete dd.off[d.pid];});toast('휴무를 뺐습니다');} return; }
+  const to=cell.dataset.k;if(to===d.from)return;
+  if(d.from)changeDay(d.from,dd=>{delete dd.off[d.pid];});
+  changeDay(to,dd=>{dd.off[d.pid]=d.type;});
+}
+document.addEventListener('pointerup',e=>endDrag(e,false));
+document.addEventListener('pointercancel',e=>endDrag(e,true));
+
 function cycle(k,pid){
   const order=[undefined,'off','annual','extra'];
   changeDay(k,d=>{const cur=d.off[pid];const nx=order[(order.indexOf(cur)+1)%order.length];if(nx)d.off[pid]=nx;else delete d.off[pid];});
