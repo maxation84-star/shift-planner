@@ -327,7 +327,7 @@ function normalize(s){
   const rids=new Set(out.rooms.map(r=>r.id));
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
-    out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:String(b.label||'').slice(0,12)});
+    out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:''});
   });
   const ids=new Set(out.people.map(p=>p.id));
   Object.keys(s.days||{}).forEach(k=>{
@@ -356,10 +356,10 @@ function persistLocal(){try{const j=JSON.stringify(state);localStorage.setItem(S
 /* 11월 임시 휴무표(이름 기준). 해당 달에 입력이 없을 때 한 번만 채워 넣는다. */
 const SEED={month:"2026-11",days:{"2026-11-01":{"off":{"용태중":"off","김경숙":"off"}},"2026-11-02":{"off":{"김경숙":"off"}},"2026-11-03":{"off":{"김규선":"off","서수정":"off","김정민":"off","박태선":"off"}},"2026-11-05":{"off":{"김은정":"off"}},"2026-11-06":{"off":{"전희원":"off","허나경":"off"}},"2026-11-07":{"off":{"용태중":"off"}},"2026-11-09":{"off":{"홍기범":"off"}},"2026-11-10":{"off":{"김규선":"off","서수정":"off","김정민":"off","홍기범":"off"}},"2026-11-11":{"off":{"김정민":"off","김은정":"off","김규선":"off","용태중":"off","김경숙":"off","허나경":"off"}},"2026-11-12":{"off":{"김은정":"off","전희원":"off","김경숙":"off","허나경":"off"}},"2026-11-13":{"off":{"전희원":"off"}},"2026-11-14":{"off":{"용태중":"off","박태선":"off"}},"2026-11-15":{"off":{"용태중":"off"}},"2026-11-17":{"off":{"김규선":"off"}},"2026-11-18":{"off":{"박태선":"off"}},"2026-11-19":{"off":{"서수정":"off","김경숙":"off","용태중":"off","전희원":"off"}},"2026-11-20":{"off":{"박태선":"off"}},"2026-11-21":{"off":{"서수정":"off","김정민":"off"}},"2026-11-22":{"off":{"김경숙":"off"}},"2026-11-23":{"off":{"용태중":"off"}},"2026-11-24":{"off":{"용태중":"off"}},"2026-11-25":{"off":{"김규선":"annual","김경숙":"off"}},"2026-11-26":{"off":{"박태선":"annual"}},"2026-11-27":{"off":{"전희원":"annual"}},"2026-11-28":{"off":{"서수정":"annual","김정민":"annual"}},"2026-11-29":{"off":{"용태중":"annual"}},"2026-11-30":{"off":{"김경숙":"off"}}}};
 SEED.bookings=[
-  {room:'다락',start:'2026-10-31',nights:1,label:'배**'},{room:'다락',start:'2026-11-01',nights:1,label:'홍**'},{room:'다락',start:'2026-11-02',nights:2,label:'곽**'},
-  {room:'첨벙',start:'2026-10-30',nights:2,label:'최**'},{room:'첨벙',start:'2026-11-01',nights:1,label:'강**'},{room:'첨벙',start:'2026-11-02',nights:1,label:'권**'},
-  {room:'모닥',start:'2026-10-31',nights:2,label:'박**'},{room:'모닥',start:'2026-11-02',nights:2,label:'김**'},
-  {room:'노지',start:'2026-10-31',nights:1,label:'송**'},{room:'노지',start:'2026-11-01',nights:1,label:'오**'},{room:'노지',start:'2026-11-03',nights:1,label:'김**'}];
+  {room:'다락',start:'2026-10-31',nights:1,label:''},{room:'다락',start:'2026-11-01',nights:1,label:''},{room:'다락',start:'2026-11-02',nights:2,label:''},
+  {room:'첨벙',start:'2026-10-30',nights:2,label:''},{room:'첨벙',start:'2026-11-01',nights:1,label:''},{room:'첨벙',start:'2026-11-02',nights:1,label:''},
+  {room:'모닥',start:'2026-10-31',nights:2,label:''},{room:'모닥',start:'2026-11-02',nights:2,label:''},
+  {room:'노지',start:'2026-10-31',nights:1,label:''},{room:'노지',start:'2026-11-01',nights:1,label:''},{room:'노지',start:'2026-11-03',nights:1,label:''}];
 function applySeed(){
   try{
     const bflag='shiftplan.seed.bookings.'+SEED.month;
@@ -571,7 +571,7 @@ function renderCal(){
       const kindCls=x=>x.kind==='work'?'work':(x.nights>=2?'multi':'single');
       if(out)b+=`<span class="lb out ${kindCls(out)}"></span>`;
       if(cover){const isIn=cover.start===k;const cls=kindCls(cover)+(isIn?' in':'')+(isIn&&out?' half':'');
-        const txt=isIn?`${esc(cover.label||(cover.kind==='work'?'공사':'입실'))} ${cover.nights}박`:'';
+        const txt=isIn?(cover.kind==='work'?`공사 ${cover.nights}일`:cover.nights>=2?`연박 ${cover.nights}박`:'입실'):'';
         b+=`<span class="lb ${cls}">${cover.kind==='work'&&!isIn?'':txt}</span>`;}
       else if(!out)b+=`<span class="lb vac"></span>`;
       return `<span class="lane">${b}</span>`;}).join('')+'</span>';
@@ -662,7 +662,7 @@ function renderSide(){
   const mk=monthKeys(view.y,view.m);
   const roomRows=state.rooms.map(r=>{
     let nights=0,work=0;const ins=[];
-    mk.forEach(k=>{const {cover}=laneState(r.id,k);if(!cover)return;if(cover.kind==='work')work++;else{nights++;if(cover.start===k)ins.push(`${parseInt(k.slice(8),10)}일${cover.label?' '+esc(cover.label):''}(${cover.nights}박)`);}});
+    mk.forEach(k=>{const {cover}=laneState(r.id,k);if(!cover)return;if(cover.kind==='work')work++;else{nights++;if(cover.start===k)ins.push(`${parseInt(k.slice(8),10)}일(${cover.nights}박)`);}});
     return `<div class="row" style="padding:5px 0;flex-wrap:wrap"><span class="tag" style="background:${r.color};color:#1f2430">${esc(r.name)}</span><span style="font-variant-numeric:tabular-nums">${nights}박 · 공실 ${mk.length-nights-work}일${work?` · 공사 ${work}일`:''}</span>${ins.length?`<span class="msg" style="margin:0;width:100%">입실 ${ins.join(', ')}</span>`:''}</div>`;}).join('');
   const tg=document.createElement('div');tg.className='panel';
   tg.innerHTML=`<h3>객실 ${view.m+1}월</h3><div class="daytags">${roomRows}</div>${state.bookings.length?'':'<div class="empty-note">날짜를 눌러 객실별 입실(박수)·공사를 넣으면 띠로 표시됩니다.</div>'}`;
@@ -694,9 +694,8 @@ function openDay(k){
     ${state.rooms.map(r=>{const {cover,out}=laneState(r.id,k);
       if(cover){const isIn=cover.start===k;const [sy,sm,sd]=cover.start.split('-').map(Number);const e=bookingEnd(cover);const [ey,em,ed]=e.split('-').map(Number);
         return `<div class="row" data-bk="${cover.id}"><span class="who"><span class="dot" style="background:${r.color}"></span>${esc(r.name)}</span>
-          <span style="font-size:12px;color:var(--muted)">${cover.kind==='work'?'공사':'입실'} ${sm}/${sd} ~ ${em}/${ed} 퇴실${isIn?'':' (연박 중)'}</span>
+          <span style="font-size:12px;color:var(--muted)">${cover.kind==='work'?'공사':cover.nights>=2?'연박':'입실'} ${sm}/${sd} ~ ${em}/${ed}${cover.kind==='work'?'':' 퇴실'}${isIn?'':' (연박 중)'}</span>
           <span class="seg"><button data-act="minus" title="1박 줄이기">−</button><button disabled style="font-variant-numeric:tabular-nums">${cover.nights}박</button><button data-act="plus" title="1박 늘리기">＋</button></span>
-          <input data-act="label" value="${esc(cover.label)}" maxlength="12" placeholder="${cover.kind==='work'?'메모(예: 보일러)':'예약자(예: 김**)'}" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--paper);width:8em;min-width:0">
           <button class="btn small danger" data-act="del">삭제</button></div>`;}
       return `<div class="row" data-room="${r.id}"><span class="who"><span class="dot" style="background:${r.color}"></span>${esc(r.name)}</span>
         <span style="font-size:12px;color:var(--muted)">${out?'오전 퇴실 · 이후 공실':'공실'}</span>
@@ -714,14 +713,12 @@ function openDay(k){
   sheet.querySelectorAll('.row[data-room] .tbtn').forEach(b=>b.onclick=()=>{
     const rid=b.closest('.row').dataset.room,n=+b.dataset.n,kind=b.dataset.kind||'stay';
     changeBookings(()=>{state.bookings.push({id:uid(),room:rid,start:k,nights:n,kind,label:''});});openDay(k);
-    setTimeout(()=>{const inp=$('#sheet').querySelector(`.row[data-bk] input`);},0);
   });
   sheet.querySelectorAll('.row[data-bk]').forEach(row=>{
     const b=state.bookings.find(x=>x.id===row.dataset.bk);if(!b)return;
     row.querySelector('[data-act="minus"]').onclick=()=>{if(b.nights<=1)return;changeBookings(()=>{b.nights--;});openDay(k);};
     row.querySelector('[data-act="plus"]').onclick=()=>{changeBookings(()=>{b.nights=Math.min(90,b.nights+1);});openDay(k);};
     row.querySelector('[data-act="del"]').onclick=()=>{changeBookings(()=>{state.bookings=state.bookings.filter(x=>x!==b);});openDay(k);};
-    let lt;row.querySelector('[data-act="label"]').oninput=e=>{clearTimeout(lt);const v=e.target.value;lt=setTimeout(()=>{if(viewOnly)return;b.label=v.trim().slice(0,12);scheduleSave();renderCal();renderSide();},400);};
   });
   let memoT;sheet.querySelector('#memoIn').oninput=e=>{clearTimeout(memoT);const v=e.target.value;memoT=setTimeout(()=>changeDay(k,dd=>{dd.memo=v.trim().slice(0,80);}),400);};
   sheet.querySelector('#clearDay').onclick=()=>{changeBookings(()=>{state.bookings=state.bookings.filter(b=>b.start!==k);});changeDay(k,dd=>{dd.off={};dd.tags=[];dd.memo='';});openDay(k);};
@@ -836,7 +833,7 @@ function monthText(){
   const f=arr=>arr.map(d=>`${d}(${DOW[dow(view.y,view.m,d)]})`).join(' ');
   st.forEach(r=>{L.push('',`■ ${r.p.name}(${WORK[r.p.work].label})  휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}`);
     if(r.off.length)L.push(`  휴무: ${f(r.off)}`);if(r.annual.length)L.push(`  연차: ${f(r.annual)}`);if(r.extra.length)L.push(`  추가: ${f(r.extra)}`);});
-  const rl=state.rooms.map(r=>{const ins=monthKeys(view.y,view.m).map(k=>{const {cover}=laneState(r.id,k);return cover&&cover.start===k?`${parseInt(k.slice(8),10)}일${cover.label?' '+cover.label:''} ${cover.kind==='work'?'공사':''}${cover.nights}박`:null;}).filter(Boolean);return ins.length?`${r.name}: ${ins.join(', ')}`:null;}).filter(Boolean);
+  const rl=state.rooms.map(r=>{const ins=monthKeys(view.y,view.m).map(k=>{const {cover}=laneState(r.id,k);return cover&&cover.start===k?`${parseInt(k.slice(8),10)}일 ${cover.kind==='work'?'공사':cover.nights>=2?'연박':'입실'} ${cover.nights}박`:null;}).filter(Boolean);return ins.length?`${r.name}: ${ins.join(', ')}`:null;}).filter(Boolean);
   if(rl.length)L.push('',...rl);
   const memos=monthKeys(view.y,view.m).filter(k=>getDay(k).memo).map(k=>`${parseInt(k.slice(8),10)}일 ${getDay(k).memo}`);
   if(memos.length)L.push('',...memos);
@@ -994,7 +991,7 @@ async function renderCalendarImage(){
         if(out){if(out.kind==='work')hatch(lx,lw*0.48,TAGC.work);else{ctx.save();ctx.beginPath();ctx.rect(lx,cy,lw*0.48,LH);ctx.clip();ctx.fillStyle=out.nights>=2?'#f9c3c3':'#ffffff';rr(ctx,lx-10,cy,lw*0.48+10,LH,7);ctx.fill();if(out.nights<2){ctx.strokeStyle='#c9d1dc';ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();}}
         if(cover){const isIn=cover.start===k;const bx=isIn?(out?lx+lw*0.5:lx+3):lx;const bw=isIn?(lx+lw-bx):lw;
           if(cover.kind==='work'){hatch(bx,bw,TAGC.work);}else fillB(cover,bx,bw,isIn);
-          if(isIn){ctx.fillStyle=INK;ctx.font='bold 11px '+font;let t=`${cover.label||(cover.kind==='work'?'공사':'입실')} ${cover.nights}박`;while(ctx.measureText(t).width>bw-10&&t.length>1)t=t.slice(0,-1);ctx.fillText(t,bx+6,cy+13);}}
+          if(isIn){ctx.fillStyle=INK;ctx.font='bold 11px '+font;let t=cover.kind==='work'?`공사 ${cover.nights}일`:cover.nights>=2?`연박 ${cover.nights}박`:'입실';while(ctx.measureText(t).width>bw-10&&t.length>1)t=t.slice(0,-1);ctx.fillText(t,bx+6,cy+13);}}
         else if(!out){ctx.save();ctx.strokeStyle='#eef1f5';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx+2,cy+LH);ctx.lineTo(lx+lw-2,cy+LH);ctx.stroke();ctx.restore();}
         cy+=LH+3;});
       cy+=6;
