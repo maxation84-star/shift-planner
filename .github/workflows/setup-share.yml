@@ -1,0 +1,42 @@
+# 계정 없는 공유 저장소(JSON bin)를 만들어 share.json 에 주소를 기록한다. (한 번만 실행)
+name: Setup shared storage
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create bin and record share.json
+        run: |
+          set -e
+          if [ -s share.json ] && grep -q '"bin"' share.json; then echo "share.json already set:"; cat share.json; exit 0; fi
+          URL=""
+          echo "== try extendsclass"
+          R=$(curl -sS -m 30 -w '\n%{http_code}' -X POST https://json.extendsclass.com/bin -H 'Content-Type: application/json' --data-binary @seed.json || true)
+          echo "$R" | tail -1
+          ID=$(echo "$R" | head -1 | python3 -c 'import sys,json
+try:
+  print(json.load(sys.stdin).get("id",""))
+except Exception: print("")' || true)
+          if [ -n "$ID" ]; then URL="https://json.extendsclass.com/bin/$ID"; fi
+          if [ -z "$URL" ]; then
+            echo "== try jsonblob"
+            LOC=$(curl -sS -m 30 -D - -o /dev/null -X POST https://jsonblob.com/api/jsonBlob -H 'Content-Type: application/json' -H 'Accept: application/json' --data-binary @seed.json | grep -i '^location:' | tr -d '\r' | awk '{print $2}' || true)
+            case "$LOC" in /*) URL="https://jsonblob.com$LOC";; http*) URL="$LOC";; esac
+          fi
+          [ -n "$URL" ] || { echo "no provider worked"; exit 1; }
+          echo "== bin: $URL"
+          echo "== read back"; curl -sS -m 30 "$URL" | head -c 300; echo
+          echo "== CORS preflight (PUT from github.io)"
+          curl -sS -m 30 -i -X OPTIONS "$URL" -H 'Origin: https://maxation84-star.github.io' -H 'Access-Control-Request-Method: PUT' -H 'Access-Control-Request-Headers: content-type' | grep -i 'access-control\|^HTTP' || true
+          echo "== CORS GET"
+          curl -sS -m 30 -i "$URL" -H 'Origin: https://maxation84-star.github.io' | grep -i 'access-control\|^HTTP' || true
+          printf '{"bin":"%s"}\n' "$URL" > share.json
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add share.json
+          git commit -m "공유 저장소 연결 (share.json)"
+          git push

@@ -108,7 +108,7 @@ button{cursor:pointer}
 .lb.in{left:3px;border-radius:7px 0 0 7px}
 .lb.end{right:3px;border-radius:0 7px 7px 0}
 .lb.in.end{border-radius:7px}
-.lb.vac{display:none}
+.lb.vac{background:none;color:var(--muted);font-weight:500;opacity:.75;box-shadow:none}
 .lb.multi{background:var(--bk-multi)}
 .lb.single{background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line)}
 .lb.work{left:3px;right:3px;border-radius:4px;background:repeating-linear-gradient(-45deg,var(--tag-work) 0 4px,rgba(217,115,26,.35) 4px 8px);color:#1f2430}
@@ -244,6 +244,24 @@ button{cursor:pointer}
   .quick .hint{display:none}
   .month-nav{order:3;width:100%;justify-content:center}
 }
+/* 직원용 보기 모드: 달력만 크게 */
+body.view-mode .tools .btn:not(#shareBtn):not(#reqBtn){display:none}
+body.view-mode #quick,body.view-mode .brand small{display:none}
+body.view-mode .main{grid-template-columns:minmax(0,1fr)}
+body.view-mode .side{position:static;order:1;flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
+body.view-mode .side .panel{display:none}
+body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
+@media(max-width:560px){
+  body.view-mode{--laneh:14px}
+  body.view-mode .lb{font-size:9px}
+  body.view-mode .cell{min-height:88px}
+  body.view-mode .chip{font-size:11px;padding:2px 5px}
+  body.view-mode .cell .num{font-size:13px}
+}
+.req{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px}
+.req .st{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--line-soft)}
+.req .st.pending{background:#fff1c9;color:#7a5200} .req .st.approved{background:#d8f3e3;color:#1c6b43} .req .st.rejected{background:#fde0e0;color:#8c2b2b}
+.badge{background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:0 5px;margin-left:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -263,11 +281,12 @@ button{cursor:pointer}
       <button class="btn small" id="shareBtn">📤 공유</button>
       <button class="btn small" id="backupBtn">💾 백업</button>
       <button class="btn small" id="shareSetBtn" hidden>🔗 공유 설정</button>
+      <button class="btn small" id="reqBtn">📨 변경 요청</button>
     </div>
   </header>
 
   <div class="banner" id="roBanner" hidden>이 페이지는 읽기 전용으로 열렸습니다. 변경한 내용은 이 기기에만 남고 다른 사람에게는 공유되지 않습니다.</div>
-  <div class="banner" id="viewBanner" hidden>보기 전용 링크로 열렸습니다. 휴무 입력은 편집 링크에서만 됩니다.</div>
+  <div class="banner" id="viewBanner" hidden>보기 모드입니다. 휴무 입력은 담당자만 할 수 있고, 바꾸고 싶은 날이 있으면 "변경 요청"을 보내세요.</div>
 
   <div class="quick" id="quick"></div>
 
@@ -278,7 +297,7 @@ button{cursor:pointer}
       <div class="legend">
         <span><i class="sw" style="background:var(--bk-multi);border-radius:6px 0 0 6px;width:18px"></i>연박</span><span><i class="sw" style="background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line);border-radius:6px 0 0 6px;width:18px"></i>단박</span><span>빈칸 = 공실 (퇴실일엔 표시 없음)</span><span><i class="sw work"></i>공사</span>
         <span><i class="sw sol"></i>휴무</span><span><i class="sw ann"></i>연차</span><span><i class="sw ext"></i>추가휴무</span>
-        <span>날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다</span>
+        <span id="legendHint">날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다</span>
       </div>
     </section>
     <aside class="side" id="side"></aside>
@@ -312,7 +331,7 @@ function defaultState(){
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],days:{}};
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
     const work=WORK[p.work]?p.work:(p.baseOff==8?'w5':'w6');
@@ -325,6 +344,14 @@ function normalize(s){
   (Array.isArray(s.rooms)?s.rooms:[]).forEach((r,i)=>{if(!r)return;out.rooms.push({id:String(r.id||uid()),name:String(r.name||'객실').slice(0,8),color:/^#[0-9a-f]{6}$/i.test(r.color)?r.color.toLowerCase():ROOM_PALETTE[i%ROOM_PALETTE.length]});});
   if(!out.rooms.length)out.rooms=defaultState().rooms;
   const rids=new Set(out.rooms.map(r=>r.id));
+  const cutoff=Date.now()-60*86400000;
+  (Array.isArray(s.requests)?s.requests:[]).forEach(q=>{
+    if(!q||!ids.has(q.pid))return;const ok=d=>!d||/^\d{4}-\d{2}-\d{2}$/.test(d);if(!ok(q.from)||!ok(q.to)||(!q.from&&!q.to))return;
+    const st=['pending','approved','rejected'].includes(q.status)?q.status:'pending';const t=+q.t||Date.now();
+    if(st!=='pending'&&t<cutoff)return;
+    out.requests.push({id:String(q.id||uid()),pid:q.pid,from:q.from||'',to:q.to||'',note:String(q.note||'').slice(0,80),status:st,t});
+  });
+  out.requests=out.requests.slice(-200);
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
     out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:''});
@@ -360,6 +387,14 @@ SEED.bookings=[
   {room:'첨벙',start:'2026-10-30',nights:2,label:''},{room:'첨벙',start:'2026-11-01',nights:1,label:''},{room:'첨벙',start:'2026-11-02',nights:1,label:''},
   {room:'모닥',start:'2026-10-31',nights:2,label:''},{room:'모닥',start:'2026-11-02',nights:2,label:''},
   {room:'노지',start:'2026-10-31',nights:1,label:''},{room:'노지',start:'2026-11-01',nights:1,label:''},{room:'노지',start:'2026-11-03',nights:1,label:''}];
+function applyViewMode(){
+  document.body.classList.toggle('view-mode',viewOnly);
+  $('#legendHint').textContent=viewOnly?'날짜를 누르면 그 날 휴무·객실 상태가 보입니다':'날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다';
+  $('#viewBanner').hidden=!viewOnly;
+  ['peopleBtn','autoBtn','backupBtn'].forEach(id=>$('#'+id).hidden=viewOnly);
+  $('#quick').hidden=viewOnly;
+  renderReqBtn();render();
+}
 function applySeed(){
   try{
     const bflag='shiftplan.seed.bookings.'+SEED.month;
@@ -393,9 +428,10 @@ let quickPerson=null;
 let db=null,cloudRef=null,saveTimer=null,readOnly=false,pushedOnce=false;
 let fbUrl=null,fbES=null,viewOnly=false;
 const DB_KEY='shiftplan.db';
-let bin=null;const BIN_KEY='shiftplan.bin';
+let bin=null;const BIN_KEY='shiftplan.bin';let editor=false;
 function readShareHash(){
-  const h=location.hash||'';const m=h.match(/[#&]db=([^&]+)/);const b=h.match(/[#&]bin=([^&]+)/);const kk=h.match(/[#&]key=([^&]+)/);
+  const h=location.hash||'';
+  try{if(/[#&]edit\b/.test(h))localStorage.setItem('shiftplan.editor','1');if(/[#&]view\b/.test(h))localStorage.removeItem('shiftplan.editor');editor=localStorage.getItem('shiftplan.editor')==='1';}catch(e){}const m=h.match(/[#&]db=([^&]+)/);const b=h.match(/[#&]bin=([^&]+)/);const kk=h.match(/[#&]key=([^&]+)/);
   if(b){try{bin={url:decodeURIComponent(b[1]),key:kk?decodeURIComponent(kk[1]):''};if(!/^https:\/\/(json\.extendsclass\.com\/bin\/|jsonblob\.com\/api\/jsonBlob\/)[A-Za-z0-9-]+$/.test(bin.url))bin=null;else localStorage.setItem(BIN_KEY,JSON.stringify(bin));}catch(e){bin=null;}}
   else{try{bin=JSON.parse(localStorage.getItem(BIN_KEY)||'null');}catch(e){bin=null;}}
   if(m){try{fbUrl=cleanDbUrl(decodeURIComponent(m[1]));localStorage.setItem(DB_KEY,fbUrl);}catch(e){}}
@@ -447,6 +483,16 @@ async function binSave(){
     if(!r.ok)throw new Error(r.status);setSync('cloud','기기 + 공유 저장 중');}
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 편집 링크로 열었는지 확인하세요.');}
 }
+async function remoteMutate(fn){
+  if(bin){
+    try{const r=await fetch(bin.url,{cache:'no-store'});const latest=r.ok?normalize(await r.json()):JSON.parse(JSON.stringify(state));fn(latest);
+      const h={'Content-Type':'application/json'};if(bin.key)h['Security-key']=bin.key;
+      const w=await fetch(bin.url,{method:'PUT',headers:h,body:JSON.stringify(latest)});if(!w.ok)throw new Error(w.status);
+      state=latest;persistLocal();render();return true;}
+    catch(e){toast('서버에 보내지 못했습니다. 잠시 후 다시 시도하세요.');return false;}
+  }
+  fn(state);persistLocal();if(!readOnly)scheduleSave();else if(cloudRef){try{await cloudRef.set(JSON.parse(JSON.stringify(state)));}catch(e){}}render();return true;
+}
 async function binCreate(){
   const body=JSON.stringify(state);const key=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
   try{const r=await fetch('https://json.extendsclass.com/bin',{method:'POST',headers:{'Content-Type':'application/json','Security-key':key},body});
@@ -462,7 +508,14 @@ async function fbSave(){
 }
 function setSync(mode,text){const el=$('#sync');el.className='sync '+mode;el.querySelector('span').textContent=text;}
 async function initCloud(){
-  if(!(window.claude&&typeof window.claude.use==='function')){readShareHash();$('#shareSetBtn').hidden=false;if(fbUrl)initFirebase();else initBin();return;}
+  if(!(window.claude&&typeof window.claude.use==='function')){
+    readShareHash();$('#shareSetBtn').hidden=false;
+    if(fbUrl){initFirebase();applyViewMode();return;}
+    if(bin){initBin();applyViewMode();return;}
+    /* 저장소에 심어 둔 공유 주소(share.json)가 있으면 자동 연결: 기본은 보기 모드, #edit 로 연 기기만 편집 */
+    try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};if(!editor)viewOnly=readOnly=true;initBin();}}}catch(e){}
+    applyViewMode();return;
+  }
   try{db=await window.claude.use('db');}catch(e){db=null;}
   if(!db)return;
   try{cloudRef=db.doc('schedule/main');}catch(e){db=null;return;}
@@ -531,7 +584,7 @@ function monthStats(y,m){
 }
 
 /* ---------- 렌더 ---------- */
-function render(){renderTitle();renderQuick();renderCal();renderSide();}
+function render(){renderTitle();renderQuick();renderCal();renderSide();renderReqBtn();}
 function renderTitle(){$('#monthTitle').textContent=`${view.y}년 ${view.m+1}월`;}
 function renderQuick(){
   const q=$('#quick');q.innerHTML='';
@@ -572,7 +625,7 @@ function renderCal(){
       if(cover){const isIn=cover.start===k;const isEnd=bookingEnd(cover)===addDays(k,1);const cls=kindCls(cover)+(isIn?' in':'')+(isEnd?' end':'');
         const txt=isIn?(cover.kind==='work'?`공사 ${cover.nights}일`:cover.nights>=2?`연박 ${cover.nights}박`:'입실'):'';
         b+=`<span class="lb ${cls}">${cover.kind==='work'&&!isIn?'':txt}</span>`;}
-      else b+=`<span class="lb vac"></span>`;
+      else b+=`<span class="lb vac">공실</span>`;
       return `<span class="lane">${b}</span>`;}).join('')+'</span>';
     if(day.memo)html+=`<span class="memo">${esc(day.memo)}</span>`;
     const offs=state.people.filter(p=>day.off[p.id]);
@@ -633,11 +686,11 @@ function renderSide(){
   const side=$('#side');side.innerHTML='';
   const st=monthStats(view.y,view.m);
   const tot=st.reduce((a,r)=>a+r.total,0);
-  const tp=document.createElement('div');tp.className='panel total-panel';
+  const tp=document.createElement('div');tp.className='panel total-panel keep';
   tp.innerHTML=`<h3>${view.m+1}월 전체</h3><div class="total"><b>${tot}</b><span>일 휴무 (${state.people.length}명)</span></div>
     <div class="dates" style="margin-top:4px">근무일 ${dim(view.y,view.m)}일 중</div>`;
   side.appendChild(tp);
-  const tbl=document.createElement('div');tbl.className='panel';
+  const tbl=document.createElement('div');tbl.className='panel keep';
   tbl.innerHTML=`<h3>직원별 한눈에</h3><table class="sum"><thead><tr><th>이름</th><th>휴무</th><th>연차</th><th>추가</th><th>합</th></tr></thead><tbody>${st.map(r=>{
     const over=r.off.length>r.p.baseOff;const left=r.p.baseOff-r.off.length;
     return `<tr><td><i style="background:${r.p.color}"></i>${esc(r.p.name)}<small>${WORK[r.p.work].label}</small></td><td class="${over?'bad':left===0?'ok':''}">${r.off.length}/${r.p.baseOff}</td><td class="${r.annual.length>=r.p.annual?'ok':''}">${r.annual.length}/${r.p.annual}</td><td>${r.extra.length||''}</td><td><b>${r.total}</b></td></tr>`;}).join('')}</tbody></table>`;
@@ -675,7 +728,71 @@ $('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeSheet
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#overlay').hidden)closeSheet();});
 let toastT;function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200);}
 
+function openDayView(k){
+  const [y,mo,d]=k.split('-').map(Number);const day=getDay(k);const wd=dow(y,mo-1,d);
+  const offs=state.people.filter(p=>day.off[p.id]).map(p=>`<span class="chip ${day.off[p.id]}" style="--pc:${p.color};display:inline-flex;font-size:13px;padding:4px 10px">${esc(p.name)}${day.off[p.id]!=='off'?' · '+TYPES[day.off[p.id]]:''}</span>`).join(' ')||'<span class="msg" style="margin:0">쉬는 사람 없음</span>';
+  const rooms=state.rooms.map(r=>{const {cover}=laneState(r.id,k);const t=!cover?'공실':cover.kind==='work'?'공사':cover.nights>=2?`연박 ${cover.nights}박${cover.start===k?' (입실)':''}`:'입실';return `<span class="tag" style="background:${r.color};color:#1f2430;font-size:12px;padding:3px 8px">${esc(r.name)} ${t}</span>`;}).join(' ');
+  openSheet(`<h2>${mo}월 ${d}일 (${DOW[wd]})</h2>
+    <div class="sub">휴무</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${offs}</div>
+    <div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>
+    ${day.memo?`<div class="msg">메모: ${esc(day.memo)}</div>`:''}
+    <div class="actions"><button class="btn" id="dvReq">📨 이 날짜로 변경 요청</button><button class="btn primary" id="dvClose">닫기</button></div>`);
+  $('#dvClose').onclick=closeSheet;$('#dvReq').onclick=()=>openRequest(k);
+}
+const MY_KEY='shiftplan.me';
+function fmtK(k){if(!k)return '없음';const [y,m,d]=k.split('-').map(Number);return `${m}/${d}(${DOW[dow(y,m-1,d)]})`;}
+function renderReqBtn(){
+  const b=$('#reqBtn');const pend=state.requests.filter(q=>q.status==='pending').length;
+  if(viewOnly){b.innerHTML='📨 변경 요청';}
+  else{b.innerHTML='📨 요청'+(pend?`<span class="badge">${pend}</span>`:'');}
+}
+function openRequest(prefK){
+  let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}
+  if(!state.people.some(p=>p.id===me))me='';
+  const draw=()=>{
+    const p=state.people.find(x=>x.id===me);
+    const myOffs=p?Object.keys(state.days).filter(k=>state.days[k].off[p.id]&&k>=todayKey).sort().slice(0,40):[];
+    const preFrom=p&&prefK&&state.days[prefK]&&state.days[prefK].off[p.id]?prefK:'';
+    const preTo=preFrom?'':(prefK||'');
+    const mine=state.requests.filter(q=>q.pid===me).sort((a,b)=>b.t-a.t).slice(0,10);
+    openSheet(`<h2>휴무 변경 요청</h2><div class="sub">담당자가 확인하고 승인하면 달력에 반영됩니다.</div>
+      <div class="field"><label for="rqWho">이름</label><select id="rqWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      ${p?`<div class="field"><label for="rqFrom">바꾸고 싶은 현재 휴무일 (새로 쉬고 싶으면 "없음")</label><select id="rqFrom"><option value="">없음 · 휴무 추가 요청</option>${myOffs.map(k=>`<option value="${k}" ${k===preFrom?'selected':''}>${fmtK(k)} ${TYPES[state.days[k].off[p.id]]}</option>`).join('')}</select></div>
+      <div class="field"><label for="rqTo">원하는 날 (빼기만 원하면 비워 두기)</label><input type="date" id="rqTo" value="${preTo}"></div>
+      <div class="field"><label for="rqNote">메모 (선택)</label><input id="rqNote" maxlength="80" placeholder="예: 병원 예약"></div>
+      <div class="actions"><button class="btn" id="rqClose">닫기</button><button class="btn primary" id="rqSend">요청 보내기</button></div><div class="msg" id="rqMsg"></div>
+      ${mine.length?`<h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px">내 요청</h3><div style="display:flex;flex-direction:column;gap:6px">${mine.map(q=>`<div class="req"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절'}[q.status]}</span><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}</div>`).join('')}</div>`:''}`
+      :`<div class="actions"><button class="btn" id="rqClose">닫기</button></div>`}`);
+    $('#rqClose').onclick=closeSheet;
+    $('#rqWho').onchange=e=>{me=e.target.value;try{localStorage.setItem(MY_KEY,me);}catch(x){}draw();};
+    const send=$('#rqSend');if(send)send.onclick=async()=>{
+      const from=$('#rqFrom').value,to=$('#rqTo').value,note=$('#rqNote').value.trim();
+      if(!from&&!to){$('#rqMsg').className='msg bad';$('#rqMsg').textContent='현재 휴무일이나 원하는 날 중 하나는 골라야 합니다.';return;}
+      if(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)){$('#rqMsg').className='msg bad';$('#rqMsg').textContent='원하는 날짜 형식이 맞지 않습니다.';return;}
+      send.disabled=true;send.textContent='보내는 중…';
+      const ok=await remoteMutate(st=>{st.requests.push({id:uid(),pid:me,from,to,note,status:'pending',t:Date.now()});});
+      if(ok){closeSheet();toast('요청을 보냈습니다');}else{send.disabled=false;send.textContent='요청 보내기';}
+    };
+  };
+  draw();
+}
+function openRequests(){
+  const list=state.requests.slice().sort((a,b)=>(a.status==='pending'?0:1)-(b.status==='pending'?0:1)||b.t-a.t);
+  const name=pid=>{const p=state.people.find(x=>x.id===pid);return p?esc(p.name):'?';};
+  openSheet(`<h2>휴무 변경 요청</h2><div class="sub">승인하면 달력에 바로 반영됩니다. 직원 화면에도 결과가 표시됩니다.</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${list.length?list.map(q=>`<div class="req" data-q="${q.id}"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절'}[q.status]}</span><b>${name(q.pid)}</b><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}<span class="msg" style="margin:0 0 0 auto">${fmtTime(q.t)}</span>${q.status==='pending'?`<span class="seg"><button data-a="approved">승인</button><button data-a="rejected">거절</button></span>`:''}</div>`).join(''):'<div class="empty-note">요청이 없습니다.</div>'}</div>
+    <div class="actions"><button class="btn primary" id="rqlClose">닫기</button></div>`);
+  $('#rqlClose').onclick=closeSheet;
+  $('#sheet').querySelectorAll('.req button[data-a]').forEach(b=>b.onclick=async()=>{
+    const id=b.closest('.req').dataset.q,act=b.dataset.a;
+    await remoteMutate(st=>{const q=st.requests.find(x=>x.id===id);if(!q||q.status!=='pending')return;q.status=act;
+      if(act==='approved'){let type='off';if(q.from&&st.days[q.from]&&st.days[q.from].off[q.pid]){type=st.days[q.from].off[q.pid];delete st.days[q.from].off[q.pid];if(!Object.keys(st.days[q.from].off).length&&!st.days[q.from].memo)delete st.days[q.from];}
+        if(q.to){st.days[q.to]=st.days[q.to]||{off:{},tags:[],memo:''};st.days[q.to].off[q.pid]=type;}}});
+    renderReqBtn();openRequests();
+  });
+}
 function openDay(k){
+  if(viewOnly)return openDayView(k);
   const [y,mo,d]=k.split('-').map(Number);const day=getDay(k);const wd=dow(y,mo-1,d);
   const rows=state.people.map(p=>{
     const cur=day.off[p.id]||'';
@@ -891,6 +1008,14 @@ function openShareSettings(){
   const base=location.href.replace(/#.*$/,'');
   const link=ro=>fbUrl?`${base}#db=${encodeURIComponent(fbUrl)}${ro?'&ro=1':''}`:bin?`${base}#bin=${encodeURIComponent(bin.url)}${ro?'&ro=1':(bin.key?'&key='+encodeURIComponent(bin.key):'')}`:'';
   if(bin&&!fbUrl){
+    const base2=location.href.replace(/#.*$/,'');
+    if(bin.auto){openSheet(`<h2>공유 설정</h2><div class="sub">저장소에 심어 둔 공유 주소로 자동 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
+      <div class="field"><label>직원용 링크 (보기 전용)</label><input readonly value="${esc(base2)}"></div>
+      <div class="field"><label>담당자용 링크 (한 번 열면 그 기기는 계속 편집 모드)</label><input readonly value="${esc(base2+'#edit')}"></div>
+      <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn small" id="cpV">직원용 복사</button><button class="btn small" id="cpE">담당자용 복사</button></div>
+      <div class="msg">편집 모드를 끄려면 ${esc(base2+'#view')} 를 한 번 열면 됩니다.</div>
+      <div class="actions"><button class="btn primary" id="dbClose">닫기</button></div>`);
+      $('#dbClose').onclick=closeSheet;$('#cpV').onclick=()=>copyText(base2,'직원용 링크를 복사했습니다');$('#cpE').onclick=()=>copyText(base2+'#edit','담당자용 링크를 복사했습니다');return;}
     openSheet(`<h2>공유 설정</h2><div class="sub">계정 없는 공유 저장소에 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
       <div class="field"><label>편집 링크 (입력 담당자에게)</label><input readonly id="linkEdit" value="${esc(link(false))}"></div>
       <div class="field"><label>보기 전용 링크 (직원들에게)</label><input readonly id="linkView" value="${esc(link(true))}"></div>
@@ -990,7 +1115,7 @@ async function renderCalendarImage(){
         if(cover){const isIn=cover.start===k;const isEnd=bookingEnd(cover)===addDays(k,1);const bx=isIn?lx+3:lx;const bw=(isEnd?lx+lw-3:lx+lw)-bx;
           if(cover.kind==='work'){hatch(bx,bw,TAGC.work);}else fillB(cover,bx,bw,isIn,isEnd);
           if(isIn){ctx.fillStyle=INK;ctx.font='bold 11px '+font;let t=cover.kind==='work'?`공사 ${cover.nights}일`:cover.nights>=2?`연박 ${cover.nights}박`:'입실';while(ctx.measureText(t).width>bw-10&&t.length>1)t=t.slice(0,-1);ctx.fillText(t,bx+6,cy+13);}}
-        else {ctx.save();ctx.strokeStyle='#eef1f5';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx+2,cy+LH);ctx.lineTo(lx+lw-2,cy+LH);ctx.stroke();ctx.restore();}
+        else {ctx.save();ctx.strokeStyle='#eef1f5';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx+2,cy+LH);ctx.lineTo(lx+lw-2,cy+LH);ctx.stroke();ctx.fillStyle='#aab3c2';ctx.font='11px '+font;ctx.fillText('공실',lx+8,cy+13);ctx.restore();}
         cy+=LH+3;});
       cy+=6;
       if(day.memo){ctx.fillStyle=MUTED;ctx.font='12px '+font;let memo=day.memo;while(ctx.measureText(memo).width>cw-12&&memo.length>1)memo=memo.slice(0,-1);ctx.fillText(memo,x+6,cy+13);cy+=20;}
@@ -1025,12 +1150,13 @@ async function openImage(){
 }
 $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
+$('#reqBtn').onclick=()=>viewOnly?openRequest(''):openRequests();
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
 
 applySeed();pickStartMonth();
 initCloud();
 render();
-if(viewOnly){['peopleBtn','autoBtn','backupBtn'].forEach(id=>$('#'+id).hidden=true);$('#quick').hidden=true;}
+if(viewOnly)applyViewMode();
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
   try{navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
 }
