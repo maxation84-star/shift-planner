@@ -1,0 +1,412 @@
+{
+"version": 1,
+"people": [
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#2563eb",
+"id": "p1",
+"name": "허나경",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#db2777",
+"id": "p2",
+"name": "홍기범",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 8,
+"color": "#16a34a",
+"id": "p3",
+"name": "김경숙",
+"work": "w5"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#d97706",
+"id": "p4",
+"name": "김규선",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#7c3aed",
+"id": "p5",
+"name": "전희원",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#0891b2",
+"id": "p6",
+"name": "서수정",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#dc2626",
+"id": "p7",
+"name": "김정민",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#4b5563",
+"id": "p8",
+"name": "박태선",
+"work": "w6"
+},
+{
+"annual": 1,
+"baseOff": 8,
+"color": "#2563eb",
+"id": "p9",
+"name": "용태중",
+"work": "w5"
+},
+{
+"annual": 1,
+"baseOff": 4,
+"color": "#db2777",
+"id": "p10",
+"name": "김은정",
+"work": "w6"
+}
+],
+"rooms": [
+{
+"id": "r1",
+"name": "다락",
+"color": "#f6c1d9"
+},
+{
+"id": "r2",
+"name": "첨벙",
+"color": "#9ed5f5"
+},
+{
+"id": "r3",
+"name": "모닥",
+"color": "#ffd59a"
+},
+{
+"id": "r4",
+"name": "노지",
+"color": "#b5e3b0"
+}
+],
+"bookings": [
+{
+"id": "uiqo8jz",
+"room": "r1",
+"start": "2026-10-31",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "heokgcm",
+"room": "r1",
+"start": "2026-11-01",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "9p94ak7",
+"room": "r1",
+"start": "2026-11-02",
+"nights": 2,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "eot7uhv",
+"room": "r2",
+"start": "2026-10-30",
+"nights": 2,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "pdhueh3",
+"room": "r2",
+"start": "2026-11-01",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "jg63q3r",
+"room": "r2",
+"start": "2026-11-02",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "afchquy",
+"room": "r3",
+"start": "2026-10-31",
+"nights": 2,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "4h7mtmm",
+"room": "r3",
+"start": "2026-11-02",
+"nights": 2,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "xmv0ao2",
+"room": "r4",
+"start": "2026-10-31",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "23jofdl",
+"room": "r4",
+"start": "2026-11-01",
+"nights": 1,
+"kind": "stay",
+"label": ""
+},
+{
+"id": "ubxfjn6",
+"room": "r4",
+"start": "2026-11-03",
+"nights": 1,
+"kind": "stay",
+"label": ""
+}
+],
+"days": {
+"2026-11-01": {
+"memo": "",
+"off": {
+"p3": "off",
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-02": {
+"memo": "",
+"off": {
+"p3": "off"
+},
+"tags": []
+},
+"2026-11-03": {
+"memo": "",
+"off": {
+"p4": "off",
+"p6": "off",
+"p7": "off",
+"p8": "off"
+},
+"tags": []
+},
+"2026-11-05": {
+"memo": "",
+"off": {
+"p10": "off"
+},
+"tags": []
+},
+"2026-11-06": {
+"memo": "",
+"off": {
+"p1": "off",
+"p5": "off"
+},
+"tags": []
+},
+"2026-11-07": {
+"memo": "",
+"off": {
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-09": {
+"memo": "",
+"off": {
+"p2": "off"
+},
+"tags": []
+},
+"2026-11-10": {
+"memo": "",
+"off": {
+"p2": "off",
+"p4": "off",
+"p6": "off",
+"p7": "off"
+},
+"tags": []
+},
+"2026-11-11": {
+"memo": "",
+"off": {
+"p1": "off",
+"p10": "off",
+"p3": "off",
+"p4": "off",
+"p7": "off",
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-12": {
+"memo": "",
+"off": {
+"p1": "off",
+"p10": "off",
+"p3": "off",
+"p5": "off"
+},
+"tags": []
+},
+"2026-11-13": {
+"memo": "",
+"off": {
+"p5": "off"
+},
+"tags": []
+},
+"2026-11-14": {
+"memo": "",
+"off": {
+"p8": "off",
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-15": {
+"memo": "",
+"off": {
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-17": {
+"memo": "",
+"off": {
+"p4": "off"
+},
+"tags": []
+},
+"2026-11-18": {
+"memo": "",
+"off": {
+"p8": "off"
+},
+"tags": []
+},
+"2026-11-19": {
+"memo": "",
+"off": {
+"p3": "off",
+"p5": "off",
+"p6": "off",
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-20": {
+"memo": "",
+"off": {
+"p8": "off"
+},
+"tags": []
+},
+"2026-11-21": {
+"memo": "",
+"off": {
+"p6": "off",
+"p7": "off"
+},
+"tags": []
+},
+"2026-11-22": {
+"memo": "",
+"off": {
+"p3": "off"
+},
+"tags": []
+},
+"2026-11-23": {
+"memo": "",
+"off": {
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-24": {
+"memo": "",
+"off": {
+"p9": "off"
+},
+"tags": []
+},
+"2026-11-25": {
+"memo": "",
+"off": {
+"p3": "off",
+"p4": "annual"
+},
+"tags": []
+},
+"2026-11-26": {
+"memo": "",
+"off": {
+"p8": "annual"
+},
+"tags": []
+},
+"2026-11-27": {
+"memo": "",
+"off": {
+"p5": "annual"
+},
+"tags": []
+},
+"2026-11-28": {
+"memo": "",
+"off": {
+"p6": "annual",
+"p7": "annual"
+},
+"tags": []
+},
+"2026-11-29": {
+"memo": "",
+"off": {
+"p9": "annual"
+},
+"tags": []
+},
+"2026-11-30": {
+"memo": "",
+"off": {
+"p3": "off"
+},
+"tags": []
+}
+},
+"requests": []
+}
