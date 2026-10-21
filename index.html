@@ -277,7 +277,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
 }
 .req{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px}
 .req .st{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--line-soft)}
-.req .st.pending{background:#fff1c9;color:#7a5200} .req .st.approved{background:#d8f3e3;color:#1c6b43} .req .st.rejected{background:#fde0e0;color:#8c2b2b}
+.req .st.pending{background:#fff1c9;color:#7a5200} .req .st.approved{background:#d8f3e3;color:#1c6b43} .req .st.rejected{background:#fde0e0;color:#8c2b2b} .req .st.reverted{background:var(--line-soft);color:var(--muted)}
 .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:0 5px;margin-left:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -368,7 +368,7 @@ function normalize(s){
   const pids=new Set(out.people.map(p=>p.id));
   (Array.isArray(s.requests)?s.requests:[]).forEach(q=>{
     if(!q||!pids.has(q.pid))return;const ok=d=>!d||/^\d{4}-\d{2}-\d{2}$/.test(d);if(!ok(q.from)||!ok(q.to)||(!q.from&&!q.to))return;
-    const st=['pending','approved','rejected'].includes(q.status)?q.status:'pending';const t=+q.t||Date.now();
+    const st=['pending','approved','rejected','reverted'].includes(q.status)?q.status:'pending';const t=+q.t||Date.now();
     if(st!=='pending'&&t<cutoff)return;
     out.requests.push({id:String(q.id||uid()),pid:q.pid,from:q.from||'',to:q.to||'',note:String(q.note||'').slice(0,80),status:st,t});
   });
@@ -814,17 +814,20 @@ function openRequest(prefK){
     openSheet(`<h2>휴무 변경 요청</h2><div class="sub">담당자가 확인하고 승인하면 달력에 반영됩니다.</div>
       <div class="field"><label for="rqWho">이름</label><select id="rqWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
       ${p?`<div class="field"><label for="rqFrom">바꾸고 싶은 현재 휴무일 (새로 쉬고 싶으면 "없음")</label><select id="rqFrom"><option value="">없음 · 휴무 추가 요청</option>${myOffs.map(k=>`<option value="${k}" ${k===preFrom?'selected':''}>${fmtK(k)} ${TYPES[state.days[k].off[p.id]]}</option>`).join('')}</select></div>
-      <div class="field"><label for="rqTo">원하는 날 (빼기만 원하면 비워 두기)</label><input type="date" id="rqTo" value="${preTo}"></div>
+      <div class="field"><label for="rqTo">원하는 날 (빼기만 원하면 비워 두기)</label><input type="date" id="rqTo" value="${preTo}" min="${todayKey}"><span class="msg" id="rqToTxt" style="margin-top:2px">${preTo?fmtK(preTo):''}</span></div>
       <div class="field"><label for="rqNote">메모 (선택)</label><input id="rqNote" maxlength="80" placeholder="예: 병원 예약"></div>
       <div class="actions"><button class="btn" id="rqClose">닫기</button><button class="btn primary" id="rqSend">요청 보내기</button></div><div class="msg" id="rqMsg"></div>
-      ${mine.length?`<h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px">내 요청</h3><div style="display:flex;flex-direction:column;gap:6px">${mine.map(q=>`<div class="req"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절'}[q.status]}</span><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}</div>`).join('')}</div>`:''}`
+      ${mine.length?`<h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px">내 요청</h3><div style="display:flex;flex-direction:column;gap:6px">${mine.map(q=>`<div class="req"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절',reverted:'승인 취소'}[q.status]}</span><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}</div>`).join('')}</div>`:''}`
       :`<div class="actions"><button class="btn" id="rqClose">닫기</button></div>`}`);
     $('#rqClose').onclick=closeSheet;
     $('#rqWho').onchange=e=>{me=e.target.value;try{localStorage.setItem(MY_KEY,me);}catch(x){}draw();};
+    const toIn=$('#rqTo');if(toIn)toIn.oninput=()=>{$('#rqToTxt').textContent=toIn.value?fmtK(toIn.value):'';};
     const send=$('#rqSend');if(send)send.onclick=async()=>{
       const from=$('#rqFrom').value,to=$('#rqTo').value,note=$('#rqNote').value.trim();
       if(!from&&!to){$('#rqMsg').className='msg bad';$('#rqMsg').textContent='현재 휴무일이나 원하는 날 중 하나는 골라야 합니다.';return;}
       if(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)){$('#rqMsg').className='msg bad';$('#rqMsg').textContent='원하는 날짜 형식이 맞지 않습니다.';return;}
+      if(to&&to<todayKey){$('#rqMsg').className='msg bad';$('#rqMsg').textContent=`${fmtK(to)}은 지난 날짜입니다. 다시 골라 주세요.`;return;}
+      if(from&&to&&from===to){$('#rqMsg').className='msg bad';$('#rqMsg').textContent='현재 휴무일과 원하는 날이 같습니다.';return;}
       send.disabled=true;send.textContent='보내는 중…';
       const ok=await remoteMutate(st=>{st.requests.push({id:uid(),pid:me,from,to,note,status:'pending',t:Date.now()});});
       if(ok){closeSheet();toast('요청을 보냈습니다');}else{send.disabled=false;send.textContent='요청 보내기';}
@@ -836,14 +839,19 @@ function openRequests(){
   const list=state.requests.slice().sort((a,b)=>(a.status==='pending'?0:1)-(b.status==='pending'?0:1)||b.t-a.t);
   const name=pid=>{const p=state.people.find(x=>x.id===pid);return p?esc(p.name):'?';};
   openSheet(`<h2>휴무 변경 요청</h2><div class="sub">승인하면 달력에 바로 반영됩니다. 직원 화면에도 결과가 표시됩니다.</div>
-    <div style="display:flex;flex-direction:column;gap:6px">${list.length?list.map(q=>`<div class="req" data-q="${q.id}"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절'}[q.status]}</span><b>${name(q.pid)}</b><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}<span class="msg" style="margin:0 0 0 auto">${fmtTime(q.t)}</span>${q.status==='pending'?`<span class="seg"><button data-a="approved">승인</button><button data-a="rejected">거절</button></span>`:''}</div>`).join(''):'<div class="empty-note">요청이 없습니다.</div>'}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${list.length?list.map(q=>`<div class="req" data-q="${q.id}"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절',reverted:'승인 취소'}[q.status]}</span><b>${name(q.pid)}</b><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}<span class="msg" style="margin:0 0 0 auto">${fmtTime(q.t)}</span>${q.status==='pending'?`<span class="seg"><button data-a="approved">승인</button><button data-a="rejected">거절</button></span>`:q.status==='approved'?`<button class="btn small" data-a="reverted">승인 취소</button>`:''}</div>`).join(''):'<div class="empty-note">요청이 없습니다.</div>'}</div>
     <div class="actions"><button class="btn primary" id="rqlClose">닫기</button></div>`);
   $('#rqlClose').onclick=closeSheet;
+  const move=(st,pid,from,to)=>{let type='off';if(from&&st.days[from]&&st.days[from].off[pid]){type=st.days[from].off[pid];delete st.days[from].off[pid];if(!Object.keys(st.days[from].off).length&&!st.days[from].memo)delete st.days[from];}
+    if(to){st.days[to]=st.days[to]||{off:{},tags:[],memo:''};st.days[to].off[pid]=type;}};
   $('#sheet').querySelectorAll('.req button[data-a]').forEach(b=>b.onclick=async()=>{
-    const id=b.closest('.req').dataset.q,act=b.dataset.a;
-    await remoteMutate(st=>{const q=st.requests.find(x=>x.id===id);if(!q||q.status!=='pending')return;q.status=act;
-      if(act==='approved'){let type='off';if(q.from&&st.days[q.from]&&st.days[q.from].off[q.pid]){type=st.days[q.from].off[q.pid];delete st.days[q.from].off[q.pid];if(!Object.keys(st.days[q.from].off).length&&!st.days[q.from].memo)delete st.days[q.from];}
-        if(q.to){st.days[q.to]=st.days[q.to]||{off:{},tags:[],memo:''};st.days[q.to].off[q.pid]=type;}}});
+    const id=b.closest('.req').dataset.q,act=b.dataset.a;const q0=state.requests.find(x=>x.id===id);if(!q0)return;
+    if(act==='approved'&&!b.dataset.arm){b.dataset.arm='1';b.textContent=`${fmtK(q0.from)}→${fmtK(q0.to)} 승인?`;return;}
+    if(act==='reverted'&&!b.dataset.arm){b.dataset.arm='1';b.textContent='정말 취소? 한 번 더';return;}
+    await remoteMutate(st=>{const q=st.requests.find(x=>x.id===id);if(!q)return;
+      if(act==='approved'&&q.status==='pending'){q.status='approved';move(st,q.pid,q.from,q.to);}
+      else if(act==='rejected'&&q.status==='pending'){q.status='rejected';}
+      else if(act==='reverted'&&q.status==='approved'){q.status='reverted';move(st,q.pid,q.to,q.from);}});
     renderReqBtn();openRequests();
   });
 }
