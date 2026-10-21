@@ -1,0 +1,30 @@
+# 공유 저장소 내용을 읽어 로그에 출력 (확인용, 읽기만)
+name: Dump shared database
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['db-dump.trigger']
+permissions:
+  contents: read
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          DB=$(python3 -c 'import json;print(json.load(open("share.json")).get("db",""))')
+          curl -sS -m 30 "$DB.json" -o /tmp/db.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/db.json')) or {}
+          print('people:',[(p['id'],p['name'],p.get('work'),p.get('baseOff')) for p in d.get('people',[])])
+          print('rooms:',[(r['id'],r['name']) for r in d.get('rooms',[])])
+          print('bookings:')
+          for b in sorted(d.get('bookings',[]),key=lambda b:(b['room'],b['start'])): print('  ',b['room'],b['start'],b['nights'],b.get('kind'),repr(b.get('label','')))
+          print('days:')
+          names={p['id']:p['name'] for p in d.get('people',[])}
+          for k in sorted(d.get('days',{})):
+            off=d['days'][k].get('off',{}); print('  ',k,{names.get(p,p):t for p,t in off.items()},d['days'][k].get('memo',''))
+          print('requests:',d.get('requests'))
+          PY
