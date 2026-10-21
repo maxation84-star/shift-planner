@@ -29,15 +29,8 @@
   --shadow:0 10px 30px rgba(23,32,51,.14);
   --radius:12px;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0f141c; --paper:#171e29; --paper-2:#1d2533; --ink:#e6eaf1; --muted:#98a3b5;
-    --line:#2b3645; --line-soft:#222c3a; --accent:#63a9dc; --accent-ink:#0f141c; --accent-soft:#1d3347;
-    --sun:#ff8078; --sat:#88b0f2; --today:#3a3320; --tag-stay:#a48cf0; --tag-work:#f0a35a; --tag-empty:#9aa7ba;
-    --ok:#4fc585; --warn:#f0b43a; --bad:#ff8078; --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
-    --bk-multi:#f0a8a8; --bk-single:#e6eaf1; --bk-line:#5a6676;
-  }
-}
+/* 기본은 항상 화이트. 어두운 모드는 명시적으로 고른 경우(data-theme=dark)에만. */
+:root{color-scheme:light}
 :root[data-theme="dark"]{
   --bg:#0f141c; --paper:#171e29; --paper-2:#1d2533; --ink:#e6eaf1; --muted:#98a3b5;
   --line:#2b3645; --line-soft:#222c3a; --accent:#63a9dc; --accent-ink:#0f141c; --accent-soft:#1d3347;
