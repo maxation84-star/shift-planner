@@ -244,8 +244,32 @@ button{cursor:pointer}
   .quick .hint{display:none}
   .month-nav{order:3;width:100%;justify-content:center}
 }
+/* 주간 보기 (폰 기본) */
+.wk{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.wday{display:grid;grid-template-columns:56px minmax(0,1fr);gap:4px 10px;padding:10px 10px 10px 8px;border-top:1px solid var(--line-soft);text-align:left;background:var(--paper);border-left:0;border-right:0;border-bottom:0;width:100%;color:inherit}
+.wday:first-child{border-top:0}
+.wday.today{background:var(--today)}
+.wday .wdate{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:2px}
+.wday .wdate b{font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.wday .wdate span{font-size:12px;color:var(--muted);margin-top:3px}
+.wday.d0 .wdate b,.wday.d0 .wdate span{color:var(--sun)} .wday.d6 .wdate b,.wday.d6 .wdate span{color:var(--sat)}
+.wday.today .wdate::after{content:"오늘";font-size:10px;font-weight:700;background:var(--accent);color:var(--accent-ink);padding:1px 6px;border-radius:999px;margin-top:4px}
+.wbody{display:flex;flex-direction:column;gap:6px;min-width:0}
+.wrooms{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.wr{font-size:12px;font-weight:600;padding:4px 6px;border-radius:7px;text-align:center;color:#1f2430;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:4px solid var(--rc)}
+.wr.vac{background:var(--paper-2);color:var(--muted);font-weight:500}
+.wr.single{background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line)}
+.wr.multi{background:var(--bk-multi)}
+.wr.work{background:repeating-linear-gradient(-45deg,var(--tag-work) 0 4px,rgba(217,115,26,.35) 4px 8px)}
+.woffs{display:flex;flex-wrap:wrap;gap:5px}
+.woffs .chip{font-size:13px;padding:4px 10px;border-radius:7px}
+.woffs .none{font-size:12px;color:var(--muted);padding:3px 0}
+.wk .memo{font-size:12px;white-space:normal}
+.wrange{font-size:12px;color:var(--muted);text-align:center;margin:-6px 0 8px}
+@media(max-width:400px){.wrooms{grid-template-columns:repeat(2,minmax(0,1fr))}.wday{grid-template-columns:48px minmax(0,1fr);padding:9px 8px 9px 6px}}
 /* 직원용 보기 모드: 달력만 크게 */
 body.view-mode .tools .btn:not(#shareBtn):not(#reqBtn){display:none}
+body.view-mode .legend{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
 body.view-mode .side{position:static;order:1;flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
@@ -273,6 +297,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
       <h2 id="monthTitle">2026년 10월</h2>
       <button class="btn icon" id="nextM" aria-label="다음 달">›</button>
       <button class="btn small" id="todayBtn">오늘</button>
+      <button class="btn small" id="modeBtn">주간</button>
     </div>
     <div class="tools">
       <span class="sync" id="sync"><i></i><span>이 기기에만 저장</span></span>
@@ -292,7 +317,9 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
 
   <div class="main">
     <section class="cal-wrap">
-      <div class="cal-head"><div class="d0">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="d6">토</div></div>
+      <div class="wrange" id="wrange" hidden></div>
+      <div class="wk" id="week" hidden></div>
+      <div class="cal-head" id="calHead"><div class="d0">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="d6">토</div></div>
       <div class="cal" id="cal" role="grid"></div>
       <div class="legend">
         <span><i class="sw" style="background:var(--bk-multi);border-radius:6px 0 0 6px;width:18px"></i>연박</span><span><i class="sw" style="background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line);border-radius:6px 0 0 6px;width:18px"></i>단박</span><span>빈칸 = 공실 (퇴실일엔 표시 없음)</span><span><i class="sw work"></i>공사</span>
@@ -418,9 +445,13 @@ let view={y:now.getFullYear(),m:now.getMonth()};
 function pickStartMonth(){
   const cur=key(view.y,view.m,1).slice(0,7);const nx=new Date(view.y,view.m+1,1);const nxk=key(nx.getFullYear(),nx.getMonth(),1).slice(0,7);
   const has=pre=>Object.keys(state.days).some(k=>k.startsWith(pre));
-  if(!has(cur)&&has(nxk))view={y:nx.getFullYear(),m:nx.getMonth()};
+  if(!has(cur)&&has(nxk)){view={y:nx.getFullYear(),m:nx.getMonth()};weekStart=sundayOf(key(view.y,view.m,1));}
 }
 let quickPerson=null;
+const MODE_KEY='shiftplan.mode';
+let mode='month';try{mode=localStorage.getItem(MODE_KEY)||(window.innerWidth<=700?'week':'month');}catch(e){mode=window.innerWidth<=700?'week':'month';}
+function sundayOf(k){const [y,m,d]=k.split('-').map(Number);const wd=dow(y,m-1,d);return addDays(k,-wd);}
+let weekStart=null;
 
 /* ---------- 공유 저장 ----------
    1) claude.ai 아티팩트로 열리면 db 기능 사용
@@ -593,8 +624,31 @@ function monthStats(y,m){
 }
 
 /* ---------- 렌더 ---------- */
-function render(){renderTitle();renderQuick();renderCal();renderSide();renderReqBtn();}
-function renderTitle(){$('#monthTitle').textContent=`${view.y}년 ${view.m+1}월`;}
+function render(){
+  if(!weekStart)weekStart=sundayOf(todayKey);
+  const wk=mode==='week';
+  $('#week').hidden=!wk;$('#wrange').hidden=!wk;$('#cal').hidden=wk;$('#calHead').hidden=wk;$('#modeBtn').textContent=wk?'월간':'주간';
+  renderTitle();renderQuick();if(wk)renderWeek();else renderCal();renderSide();renderReqBtn();
+}
+function renderTitle(){
+  if(mode==='week'){const mid=addDays(weekStart,3);const [y,m]=mid.split('-').map(Number);view={y,m:m-1};
+    const a=weekStart.split('-').map(Number),b=addDays(weekStart,6).split('-').map(Number);
+    $('#monthTitle').textContent=`${y}년 ${m}월`;$('#wrange').textContent=`${a[1]}/${a[2]}(일) ~ ${b[1]}/${b[2]}(토) · 좌우로 밀어 다음 주`;return;}
+  $('#monthTitle').textContent=`${view.y}년 ${view.m+1}월`;
+}
+function renderWeek(){
+  const w=$('#week');w.innerHTML='';
+  for(let i=0;i<7;i++){const k=addDays(weekStart,i);const [y,m,d]=k.split('-').map(Number);const day=getDay(k);
+    const el=document.createElement('button');el.className='wday d'+i+(k===todayKey?' today':'');el.dataset.k=k;
+    const rooms=state.rooms.map(r=>{const {cover}=laneState(r.id,k);const cls=!cover?'vac':cover.kind==='work'?'work':cover.nights>=2?'multi':'single';
+      const t=!cover?'공실':cover.kind==='work'?'공사':cover.nights>=2?(cover.start===k?`연박 ${cover.nights}박`:'연박'):'입실';
+      return `<span class="wr ${cls}" style="--rc:${r.color}">${esc(r.name)} ${t}</span>`;}).join('');
+    const offs=state.people.filter(p=>day.off[p.id]).map(p=>`<span class="chip ${day.off[p.id]}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span></span>`).join('');
+    el.innerHTML=`<div class="wdate"><b>${d}</b><span>${DOW[i]}</span></div><div class="wbody"><div class="wrooms">${rooms}</div><div class="woffs">${offs||'<span class="none">휴무 없음</span>'}</div>${day.memo?`<div class="memo">${esc(day.memo)}</div>`:''}</div>`;
+    el.onclick=()=>{if(suppressClick)return;if(quickPerson&&!viewOnly)cycle(k,quickPerson);else openDay(k);};
+    w.appendChild(el);
+  }
+}
 function renderQuick(){
   const q=$('#quick');q.innerHTML='';
   const lab=document.createElement('span');lab.className='label';lab.textContent='빠른 입력';q.appendChild(lab);
@@ -1068,9 +1122,15 @@ function openShareSettings(){
 }
 
 /* ---------- 이벤트 ---------- */
-$('#prevM').onclick=()=>{view.m--;if(view.m<0){view.m=11;view.y--;}render();};
-$('#nextM').onclick=()=>{view.m++;if(view.m>11){view.m=0;view.y++;}render();};
-$('#todayBtn').onclick=()=>{view={y:now.getFullYear(),m:now.getMonth()};render();};
+$('#prevM').onclick=()=>{if(mode==='week'){weekStart=addDays(weekStart,-7);}else{view.m--;if(view.m<0){view.m=11;view.y--;}}render();};
+$('#nextM').onclick=()=>{if(mode==='week'){weekStart=addDays(weekStart,7);}else{view.m++;if(view.m>11){view.m=0;view.y++;}}render();};
+$('#todayBtn').onclick=()=>{view={y:now.getFullYear(),m:now.getMonth()};weekStart=sundayOf(todayKey);render();};
+$('#modeBtn').onclick=()=>{mode=mode==='week'?'month':'week';try{localStorage.setItem(MODE_KEY,mode);}catch(e){}if(mode==='week'){const cur=key(view.y,view.m,1).slice(0,7);if(!weekStart.startsWith(cur)&&!addDays(weekStart,6).startsWith(cur))weekStart=(cur===todayKey.slice(0,7))?sundayOf(todayKey):sundayOf(key(view.y,view.m,1));}render();};
+/* 주간: 좌우로 밀어 넘기기 */
+(function(){let sx=0,sy=0,on=false;const w=$('#week');
+  w.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;sx=e.touches[0].clientX;sy=e.touches[0].clientY;on=true;},{passive:true});
+  w.addEventListener('touchend',e=>{if(!on)return;on=false;const t=e.changedTouches[0];const dx=t.clientX-sx,dy=t.clientY-sy;if(Math.abs(dx)>60&&Math.abs(dy)<50){weekStart=addDays(weekStart,dx<0?7:-7);render();}},{passive:true});
+})();
 $('#peopleBtn').onclick=()=>openPeople();
 $('#autoBtn').onclick=openAuto;
 async function shareText(){
