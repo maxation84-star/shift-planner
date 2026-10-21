@@ -1,0 +1,30 @@
+# days-update.json 이 바뀌면 그 내용으로 서버의 휴무(days)를 통째로 바꾸고, approve 목록의 요청을 승인됨으로 표시
+name: Apply days update
+on:
+  push:
+    branches: [main]
+    paths: ['days-update.json']
+permissions:
+  contents: read
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          DB=$(python3 -c 'import json;print(json.load(open("share.json")).get("db",""))')
+          python3 - "$DB" <<'PY'
+          import json,sys,urllib.request
+          db=sys.argv[1]; u=json.load(open('days-update.json'))
+          def call(path,method,data=None):
+            r=urllib.request.Request(db+path+'.json',data=None if data is None else json.dumps(data).encode(),method=method,headers={'Content-Type':'application/json'})
+            return json.load(urllib.request.urlopen(r))
+          call('/days','PUT',u['days']); print('days written:',len(u['days']))
+          reqs=call('/requests','GET') or []
+          for q in reqs:
+            if q.get('id') in u.get('approve',[]) and q.get('status')=='pending': q['status']='approved'
+          call('/requests','PUT',reqs); print('requests:',[(q['id'],q['status']) for q in reqs])
+          d=call('','GET'); names={p['id']:p['name'] for p in d['people']}
+          for k in sorted(d['days']): print(k,{names[p]:t for p,t in d['days'][k]['off'].items()})
+          PY
