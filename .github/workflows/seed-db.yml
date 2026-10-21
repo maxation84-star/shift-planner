@@ -1,0 +1,30 @@
+# share.json 의 Firebase 주소에 데이터가 비어 있으면 seed.json 을 올린다. (share.json/seed.json 이 바뀔 때, 또는 수동 실행)
+name: Seed shared database
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['share.json', 'seed.json']
+permissions:
+  contents: read
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload seed if database is empty
+        run: |
+          set -e
+          DB=$(python3 -c 'import json;print(json.load(open("share.json")).get("db",""))')
+          [ -n "$DB" ] || { echo "share.json has no db"; exit 0; }
+          echo "== GET $DB.json"
+          curl -sS -m 30 -D /tmp/h -o /tmp/b "$DB.json" -H 'Origin: https://maxation84-star.github.io' || true
+          tr -d '\r' < /tmp/h | grep -i '^HTTP\|access-control' || true; head -c 200 /tmp/b; echo
+          if grep -q '"people"' /tmp/b; then echo "already has data, not overwriting"; exit 0; fi
+          echo "== PUT seed.json"
+          curl -sS -m 30 -D /tmp/h -o /tmp/b -X PUT "$DB.json" -H 'Content-Type: application/json' --data-binary @seed.json || true
+          tr -d '\r' < /tmp/h | grep -i '^HTTP' || true; head -c 200 /tmp/b; echo
+          echo "== verify"
+          curl -sS -m 30 "$DB.json" | head -c 200; echo
+          echo "== CORS preflight PUT"
+          curl -sS -m 30 -i -X OPTIONS "$DB.json" -H 'Origin: https://maxation84-star.github.io' -H 'Access-Control-Request-Method: PUT' -H 'Access-Control-Request-Headers: content-type' | grep -i 'access-control\|^HTTP' || true
