@@ -22,8 +22,8 @@
 ## 다같이 쓰기 — 직원은 링크만, 담당자는 #edit
 
 `share.json`에 공유 저장소 주소가 들어 있으면, 앱을 여는 모든 사람이 자동으로 같은 달력에 연결됩니다.
-- 직원: `https://maxation84-star.github.io/shift-planner/` → 달력만 보이는 **보기 모드**. 날짜를 누르면 그 날 휴무·객실 상태, "📨 변경 요청"으로 휴무 날짜 변경을 요청.
-- 담당자: 같은 주소 뒤에 `#edit` 를 붙여 한 번 열면 그 기기는 계속 **편집 모드**. "📨 요청"에서 직원 요청을 승인/거절하면 달력에 바로 반영.
+- 직원: `https://maxation84-star.github.io/shift-planner/` → 달력만 보이는 **보기 모드**. 날짜를 누르면 그 날 휴무·객실 상태를 봅니다.
+- 담당자: 같은 주소 뒤에 `#edit` 를 붙여 한 번 열면 그 기기는 계속 **편집 모드**. "📨 요청"에서 이전에 들어온 요청을 승인/거절할 수 있음(직원 쪽 요청 보내기는 꺼 둠).
 - 편집 모드 끄기: 주소 뒤에 `#view`.
 
 `share.json` 형식: `{"db":"https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app/boards/우리가게"}`
