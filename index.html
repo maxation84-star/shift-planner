@@ -261,7 +261,7 @@ button{cursor:pointer}
 .wrange{font-size:12px;color:var(--muted);text-align:center;margin:-6px 0 8px}
 @media(max-width:400px){.wrooms{grid-template-columns:repeat(2,minmax(0,1fr))}.wday{grid-template-columns:48px minmax(0,1fr);padding:9px 8px 9px 6px}}
 /* 직원용 보기 모드: 달력만 크게 */
-body.view-mode .tools .btn:not(#shareBtn):not(#reqBtn){display:none}
+body.view-mode .tools .btn:not(#shareBtn){display:none}
 body.view-mode .legend{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
@@ -304,7 +304,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
   </header>
 
   <div class="banner" id="roBanner" hidden>이 페이지는 읽기 전용으로 열렸습니다. 변경한 내용은 이 기기에만 남고 다른 사람에게는 공유되지 않습니다.</div>
-  <div class="banner" id="viewBanner" hidden>보기 모드입니다. 휴무 입력은 담당자만 할 수 있고, 바꾸고 싶은 날이 있으면 "변경 요청"을 보내세요.</div>
+  <div class="banner" id="viewBanner" hidden>보기 모드입니다. 휴무 입력은 담당자만 할 수 있습니다.</div>
 
   <div class="quick" id="quick"></div>
 
@@ -792,14 +792,15 @@ function openDayView(k){
     <div class="sub">휴무</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${offs}</div>
     <div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>
     ${day.memo?`<div class="msg">메모: ${esc(day.memo)}</div>`:''}
-    <div class="actions"><button class="btn" id="dvReq">📨 이 날짜로 변경 요청</button><button class="btn primary" id="dvClose">닫기</button></div>`);
-  $('#dvClose').onclick=closeSheet;$('#dvReq').onclick=()=>openRequest(k);
+    <div class="actions"><button class="btn primary" id="dvClose">닫기</button></div>`);
+  $('#dvClose').onclick=closeSheet;
 }
 const MY_KEY='shiftplan.me';
 function fmtK(k){if(!k)return '없음';const [y,m,d]=k.split('-').map(Number);return `${m}/${d}(${DOW[dow(y,m-1,d)]})`;}
 function renderReqBtn(){
   const b=$('#reqBtn');const pend=state.requests.filter(q=>q.status==='pending').length;
-  if(viewOnly){b.innerHTML='📨 변경 요청';}
+  if(viewOnly){b.hidden=true;return;}
+  b.hidden=false;
   else{b.innerHTML='📨 요청'+(pend?`<span class="badge">${pend}</span>`:'');}
 }
 function openRequest(prefK){
@@ -1220,7 +1221,7 @@ async function openImage(){
 }
 $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
-$('#reqBtn').onclick=()=>viewOnly?openRequest(''):openRequests();
+$('#reqBtn').onclick=()=>{if(!viewOnly)openRequests();};
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
 
 applySeed();pickStartMonth();
