@@ -269,7 +269,7 @@ button{cursor:pointer}
 .wrange{font-size:12px;color:var(--muted);text-align:center;margin:-6px 0 8px}
 @media(max-width:400px){.wrooms{grid-template-columns:repeat(2,minmax(0,1fr))}.wday{grid-template-columns:48px minmax(0,1fr);padding:9px 8px 9px 6px}}
 /* 직원용 보기 모드: 달력만 크게 */
-body.view-mode .tools .btn:not(#shareBtn){display:none}
+body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn){display:none}
 body.view-mode .legend{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
@@ -285,7 +285,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
 }
 .req{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px}
 .req .st{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--line-soft)}
-.req .st.pending{background:#fff1c9;color:#7a5200} .req .st.approved{background:#d8f3e3;color:#1c6b43} .req .st.rejected{background:#fde0e0;color:#8c2b2b} .req .st.reverted{background:var(--line-soft);color:var(--muted)}
+.req .st.pending{background:#fff1c9;color:#7a5200} .req .st.accepted{background:#d8f3e3;color:#1c6b43} .req .st.cancelled{background:var(--line-soft);color:var(--muted)} .req .st.approved{background:#d8f3e3;color:#1c6b43} .req .st.rejected{background:#fde0e0;color:#8c2b2b} .req .st.reverted{background:var(--line-soft);color:var(--muted)}
 .badge{background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:0 5px;margin-left:2px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -308,11 +308,12 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
       <button class="btn small" id="backupBtn">💾 백업</button>
       <button class="btn small" id="shareSetBtn" hidden>🔗 공유 설정</button>
       <button class="btn small" id="reqBtn">📨 변경 요청</button>
+      <button class="btn small" id="swapBtn" hidden>🔁 휴무 교환</button>
     </div>
   </header>
 
   <div class="banner" id="roBanner" hidden>이 페이지는 읽기 전용으로 열렸습니다. 변경한 내용은 이 기기에만 남고 다른 사람에게는 공유되지 않습니다.</div>
-  <div class="banner" id="viewBanner" hidden>보기 모드입니다. 휴무 입력은 담당자만 할 수 있습니다.</div>
+  <div class="banner" id="viewBanner" hidden>보기 모드입니다. 휴무 입력은 담당자만 할 수 있고, 동료와 휴무를 바꾸려면 "🔁 휴무 교환"을 쓰세요.</div>
 
   <div class="quick" id="quick"></div>
 
@@ -355,11 +356,11 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],requests:[],days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],days:{}};
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
     const work=WORK[p.work]?p.work:(p.baseOff==8?'w5':'w6');
@@ -381,6 +382,13 @@ function normalize(s){
     out.requests.push({id:String(q.id||uid()),pid:q.pid,from:q.from||'',to:q.to||'',note:String(q.note||'').slice(0,80),status:st,t});
   });
   out.requests=out.requests.slice(-200);
+  (Array.isArray(s.swaps)?s.swaps:[]).forEach(w=>{
+    if(!w||!pids.has(w.a)||!pids.has(w.b)||w.a===w.b)return;const ok=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'');if(!ok(w.aDate)||!ok(w.bDate))return;
+    const st=['pending','accepted','rejected','cancelled','reverted'].includes(w.status)?w.status:'pending';const t=+w.t||Date.now();
+    if(st!=='pending'&&t<cutoff)return;
+    out.swaps.push({id:String(w.id||uid()),a:w.a,aDate:w.aDate,b:w.b,bDate:w.bDate,note:String(w.note||'').slice(0,80),status:st,t});
+  });
+  out.swaps=out.swaps.slice(-200);
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
     out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:''});
@@ -626,6 +634,7 @@ function monthStats(y,m){
 
 /* ---------- 렌더 ---------- */
 function render(){
+  renderSwapBtn();
   if(!weekStart)weekStart=sundayOf(todayKey);
   const wk=mode==='week';
   $('#week').hidden=!wk;$('#wrange').hidden=!wk;$('#cal').hidden=wk;$('#calHead').hidden=wk;$('#modeBtn').textContent=wk?'월간':'주간';
@@ -800,13 +809,13 @@ function openDayView(k){
     <div class="sub">휴무</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${offs}</div>
     <div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>
     ${day.memo?`<div class="msg">메모: ${esc(day.memo)}</div>`:''}
-    <div class="actions"><button class="btn primary" id="dvClose">닫기</button></div>`);
-  $('#dvClose').onclick=closeSheet;
+    <div class="actions"><button class="btn" id="dvSwap">🔁 이 날 휴무 교환</button><button class="btn primary" id="dvClose">닫기</button></div>`);
+  $('#dvClose').onclick=closeSheet;$('#dvSwap').onclick=()=>openSwap(k);
 }
 const MY_KEY='shiftplan.me';
 function fmtK(k){if(!k)return '없음';const [y,m,d]=k.split('-').map(Number);return `${m}/${d}(${DOW[dow(y,m-1,d)]})`;}
 function renderReqBtn(){
-  const b=$('#reqBtn');const pend=state.requests.filter(q=>q.status==='pending').length;
+  const b=$('#reqBtn');const pend=state.requests.filter(q=>q.status==='pending').length+state.swaps.filter(w=>w.status==='pending').length;
   if(viewOnly){b.hidden=true;return;}
   b.hidden=false;b.innerHTML='📨 요청'+(pend?`<span class="badge">${pend}</span>`:'');
 }
@@ -843,16 +852,98 @@ function openRequest(prefK){
   };
   draw();
 }
+/* ---------- 휴무 교환 ---------- */
+const SW_LABEL={pending:'대기',accepted:'교환됨',rejected:'거절',cancelled:'취소',reverted:'되돌림'};
+function pname(pid){const p=state.people.find(x=>x.id===pid);return p?esc(p.name):'?';}
+function applySwap(st,w){
+  const da=st.days[w.aDate],db=st.days[w.bDate];
+  const ta=da&&da.off[w.a],tb=db&&db.off[w.b];
+  if(!ta)return `${pname(w.a)}님이 ${fmtK(w.aDate)}에 더 이상 휴무가 아닙니다`;
+  if(!tb)return `${pname(w.b)}님이 ${fmtK(w.bDate)}에 더 이상 휴무가 아닙니다`;
+  delete da.off[w.a];delete db.off[w.b];
+  st.days[w.bDate]=st.days[w.bDate]||{off:{},tags:[],memo:''};st.days[w.aDate]=st.days[w.aDate]||{off:{},tags:[],memo:''};
+  st.days[w.bDate].off[w.a]=ta;st.days[w.aDate].off[w.b]=tb;return '';
+}
+function revertSwap(st,w){const t={id:w.id,a:w.a,aDate:w.bDate,b:w.b,bDate:w.aDate};return applySwap(st,t);}
+function myId(){let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}return state.people.some(p=>p.id===me)?me:'';}
+function renderSwapBtn(){
+  const b=$('#swapBtn');if(!viewOnly){b.hidden=true;return;}
+  b.hidden=false;const me=myId();const n=state.swaps.filter(w=>w.status==='pending'&&w.b===me).length;
+  b.innerHTML='🔁 휴무 교환'+(n?`<span class="badge">${n}</span>`:'');
+}
+function futureOffs(pid){return Object.keys(state.days).filter(k=>state.days[k].off[pid]&&k>=todayKey).sort().slice(0,60);}
+function openSwap(prefK){
+  let me=myId();
+  const draw=(sel)=>{
+    sel=sel||{};
+    const p=state.people.find(x=>x.id===me);
+    const received=state.swaps.filter(w=>w.status==='pending'&&w.b===me).sort((x,y)=>y.t-x.t);
+    const sent=state.swaps.filter(w=>w.a===me).sort((x,y)=>y.t-x.t).slice(0,8);
+    const myOffs=p?futureOffs(me):[];
+    let aDate=sel.aDate!==undefined?sel.aDate:(prefK&&p&&state.days[prefK]&&state.days[prefK].off[me]?prefK:(myOffs[0]||''));
+    let other=sel.other!==undefined?sel.other:(prefK&&state.days[prefK]?(Object.keys(state.days[prefK].off).find(x=>x!==me)||''):'');
+    const otherOffs=other?futureOffs(other):[];
+    let bDate=sel.bDate!==undefined?sel.bDate:(prefK&&other&&state.days[prefK].off[other]?prefK:(otherOffs[0]||''));
+    const row=w=>`<div class="req" data-w="${w.id}"><span class="st ${w.status}">${SW_LABEL[w.status]}</span><span><b>${pname(w.a)}</b> ${fmtK(w.aDate)} ⇄ <b>${pname(w.b)}</b> ${fmtK(w.bDate)}</span>${w.note?`<span class="msg" style="margin:0">${esc(w.note)}</span>`:''}`;
+    openSheet(`<h2>휴무 교환</h2><div class="sub">내 휴무일과 동료의 휴무일을 서로 바꿉니다. 상대가 수락하면 바로 달력에 반영됩니다.</div>
+      <div class="field"><label for="swWho">내 이름</label><select id="swWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      ${p?`${received.length?`<h3 style="font-size:13px;color:var(--muted);margin:12px 0 6px">나에게 온 제안</h3><div style="display:flex;flex-direction:column;gap:6px">${received.map(w=>row(w)+`<span class="seg" style="margin-left:auto"><button data-a="accepted">수락</button><button data-a="rejected">거절</button></span></div>`).join('')}</div>`:''}
+      <h3 style="font-size:13px;color:var(--muted);margin:14px 0 4px">새 교환 제안</h3>
+      <div class="field"><label for="swA">내 휴무일</label><select id="swA">${myOffs.length?myOffs.map(k=>`<option value="${k}" ${k===aDate?'selected':''}>${fmtK(k)} ${TYPES[state.days[k].off[me]]}</option>`).join(''):'<option value="">앞으로 잡힌 휴무가 없습니다</option>'}</select></div>
+      <div class="field"><label for="swB">바꿀 동료</label><select id="swB"><option value="">선택</option>${state.people.filter(x=>x.id!==me).map(x=>`<option value="${x.id}" ${x.id===other?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="swBD">동료의 휴무일 (내가 쉬고 싶은 날)</label><select id="swBD">${other?(otherOffs.length?otherOffs.map(k=>`<option value="${k}" ${k===bDate?'selected':''}>${fmtK(k)} ${TYPES[state.days[k].off[other]]}</option>`).join(''):'<option value="">이 동료는 앞으로 잡힌 휴무가 없습니다</option>'):'<option value="">동료를 먼저 고르세요</option>'}</select></div>
+      <div class="field"><label for="swNote">메모 (선택)</label><input id="swNote" maxlength="80" placeholder="예: 병원 예약이 있어서요"></div>
+      <div class="actions"><button class="btn" id="swClose">닫기</button><button class="btn primary" id="swSend">제안 보내기</button></div><div class="msg" id="swMsg"></div>
+      ${sent.length?`<h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px">내가 보낸 제안</h3><div style="display:flex;flex-direction:column;gap:6px">${sent.map(w=>row(w)+(w.status==='pending'?`<button class="btn small" data-a="cancelled" style="margin-left:auto">취소</button>`:'')+'</div>').join('')}</div>`:''}`
+      :`<div class="actions"><button class="btn" id="swClose">닫기</button></div>`}`);
+    $('#swClose').onclick=closeSheet;
+    $('#swWho').onchange=e=>{me=e.target.value;try{localStorage.setItem(MY_KEY,me);}catch(x){}draw();};
+    const swB=$('#swB');if(swB)swB.onchange=()=>draw({aDate:$('#swA').value,other:swB.value,bDate:undefined});
+    const send=$('#swSend');if(send)send.onclick=async()=>{
+      const a=$('#swA').value,b=$('#swB').value,bd=$('#swBD').value,note=$('#swNote').value.trim();
+      const bad=m=>{$('#swMsg').className='msg bad';$('#swMsg').textContent=m;};
+      if(!a)return bad('내 휴무일을 고르세요.');if(!b)return bad('바꿀 동료를 고르세요.');if(!bd)return bad('동료의 휴무일을 고르세요.');
+      if(a===bd)return bad('같은 날짜끼리는 바꿀 수 없습니다.');
+      if(state.swaps.some(w=>w.status==='pending'&&w.a===me&&w.b===b&&w.aDate===a&&w.bDate===bd))return bad('같은 제안이 이미 대기 중입니다.');
+      send.disabled=true;send.textContent='보내는 중…';
+      const ok=await remoteMutate(st=>{st.swaps.push({id:uid(),a:me,aDate:a,b,bDate:bd,note,status:'pending',t:Date.now()});});
+      if(ok){closeSheet();toast(`${pname(b)}님에게 교환 제안을 보냈습니다`);}else{send.disabled=false;send.textContent='제안 보내기';}
+    };
+    $('#sheet').querySelectorAll('.req button[data-a]').forEach(btn=>btn.onclick=async()=>{
+      const id=btn.closest('.req').dataset.w,act=btn.dataset.a;
+      if(act==='accepted'&&!btn.dataset.arm){btn.dataset.arm='1';btn.textContent='정말 수락?';return;}
+      let err='';
+      const ok=await remoteMutate(st=>{const w=st.swaps.find(x=>x.id===id);if(!w||w.status!=='pending')return;
+        if(act==='accepted'){err=applySwap(st,w);if(!err)w.status='accepted';}else w.status=act;});
+      if(err){toast(err);}else if(ok)toast(act==='accepted'?'휴무를 교환했습니다':act==='rejected'?'거절했습니다':'취소했습니다');
+      renderSwapBtn();openSwap('');
+    });
+  };
+  draw();
+}
 function openRequests(){
   const list=state.requests.slice().sort((a,b)=>(a.status==='pending'?0:1)-(b.status==='pending'?0:1)||b.t-a.t);
   const name=pid=>{const p=state.people.find(x=>x.id===pid);return p?esc(p.name):'?';};
   openSheet(`<h2>휴무 변경 요청</h2><div class="sub">승인하면 달력에 바로 반영됩니다. 직원 화면에도 결과가 표시됩니다.</div>
+    <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">휴무 교환 (직원끼리)</h3>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">${state.swaps.length?state.swaps.slice().sort((x,y)=>(x.status==='pending'?0:1)-(y.status==='pending'?0:1)||y.t-x.t).map(w=>`<div class="req" data-w="${w.id}"><span class="st ${w.status}">${SW_LABEL[w.status]}</span><span><b>${pname(w.a)}</b> ${fmtK(w.aDate)} ⇄ <b>${pname(w.b)}</b> ${fmtK(w.bDate)}</span>${w.note?`<span class="msg" style="margin:0">${esc(w.note)}</span>`:''}<span class="msg" style="margin:0 0 0 auto">${fmtTime(w.t)}</span>${w.status==='pending'?`<span class="seg"><button data-a="accepted">대신 수락</button><button data-a="cancelled">취소</button></span>`:w.status==='accepted'?`<button class="btn small" data-a="reverted">되돌리기</button>`:''}</div>`).join(''):'<div class="empty-note">교환 제안이 없습니다.</div>'}</div>
+    <h3 style="font-size:13px;color:var(--muted);margin:0 0 6px">변경 요청</h3>
     <div style="display:flex;flex-direction:column;gap:6px">${list.length?list.map(q=>`<div class="req" data-q="${q.id}"><span class="st ${q.status}">${{pending:'대기',approved:'승인',rejected:'거절',reverted:'승인 취소'}[q.status]}</span><b>${name(q.pid)}</b><span>${fmtK(q.from)} → ${fmtK(q.to)}</span>${q.note?`<span class="msg" style="margin:0">${esc(q.note)}</span>`:''}<span class="msg" style="margin:0 0 0 auto">${fmtTime(q.t)}</span>${q.status==='pending'?`<span class="seg"><button data-a="approved">승인</button><button data-a="rejected">거절</button></span>`:q.status==='approved'?`<button class="btn small" data-a="reverted">승인 취소</button>`:''}</div>`).join(''):'<div class="empty-note">요청이 없습니다.</div>'}</div>
     <div class="actions"><button class="btn primary" id="rqlClose">닫기</button></div>`);
   $('#rqlClose').onclick=closeSheet;
   const move=(st,pid,from,to)=>{let type='off';if(from&&st.days[from]&&st.days[from].off[pid]){type=st.days[from].off[pid];delete st.days[from].off[pid];if(!Object.keys(st.days[from].off).length&&!st.days[from].memo)delete st.days[from];}
     if(to){st.days[to]=st.days[to]||{off:{},tags:[],memo:''};st.days[to].off[pid]=type;}};
-  $('#sheet').querySelectorAll('.req button[data-a]').forEach(b=>b.onclick=async()=>{
+  $('#sheet').querySelectorAll('.req[data-w] button[data-a]').forEach(b=>b.onclick=async()=>{
+    const id=b.closest('.req').dataset.w,act=b.dataset.a;
+    if((act==='accepted'||act==='reverted')&&!b.dataset.arm){b.dataset.arm='1';b.textContent='정말? 한 번 더';return;}
+    let err='';
+    await remoteMutate(st=>{const w=st.swaps.find(x=>x.id===id);if(!w)return;
+      if(act==='accepted'&&w.status==='pending'){err=applySwap(st,w);if(!err)w.status='accepted';}
+      else if(act==='cancelled'&&w.status==='pending')w.status='cancelled';
+      else if(act==='reverted'&&w.status==='accepted'){err=revertSwap(st,w);if(!err)w.status='reverted';}});
+    if(err)toast(err);renderReqBtn();openRequests();
+  });
+  $('#sheet').querySelectorAll('.req[data-q] button[data-a]').forEach(b=>b.onclick=async()=>{
     const id=b.closest('.req').dataset.q,act=b.dataset.a;const q0=state.requests.find(x=>x.id===id);if(!q0)return;
     if(act==='approved'&&!b.dataset.arm){b.dataset.arm='1';b.textContent=`${fmtK(q0.from)}→${fmtK(q0.to)} 승인?`;return;}
     if(act==='reverted'&&!b.dataset.arm){b.dataset.arm='1';b.textContent='정말 취소? 한 번 더';return;}
@@ -1229,6 +1320,7 @@ async function openImage(){
 $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
 $('#reqBtn').onclick=()=>{if(!viewOnly)openRequests();};
+$('#swapBtn').onclick=()=>openSwap('');
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
 
 applySeed();pickStartMonth();
