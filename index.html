@@ -219,7 +219,15 @@ button{cursor:pointer}
   .month-nav h2{font-size:19px;min-width:7.5em}
 }
 @media(max-width:560px){
-  :root{--labw:16px;--laneh:12px}
+  :root{--labw:14px;--laneh:12px}
+  .app{padding-left:max(6px,env(safe-area-inset-left,0px));padding-right:max(6px,env(safe-area-inset-right,0px))}
+  .cell{padding:3px 1px 3px}
+  .cell .num{padding-left:2px}
+  .lanes{margin:0 -1px 2px}
+  .lb.in{left:1px} .lb.end{right:1px}
+  .chip{font-size:10px;padding:1px 1px;border-radius:4px;letter-spacing:-.04em;justify-content:center}
+  .chip .n{overflow:visible;text-overflow:clip}
+  .chip.annual,.chip.extra{border-width:1.5px;padding:0 1px}
   .rlab{padding:22px 0 0 1px;font-size:8px}
   .rlab .long{display:none} .rlab .short{display:block}
   .lb{font-size:8px;padding-left:3px;letter-spacing:-.02em}
@@ -272,7 +280,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
   body.view-mode{--laneh:14px}
   body.view-mode .lb{font-size:9px}
   body.view-mode .cell{min-height:88px}
-  body.view-mode .chip{font-size:11px;padding:2px 5px}
+  body.view-mode .chip{font-size:10.5px;padding:2px 1px}
   body.view-mode .cell .num{font-size:13px}
 }
 .req{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px}
