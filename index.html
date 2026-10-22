@@ -800,8 +800,7 @@ function fmtK(k){if(!k)return '없음';const [y,m,d]=k.split('-').map(Number);re
 function renderReqBtn(){
   const b=$('#reqBtn');const pend=state.requests.filter(q=>q.status==='pending').length;
   if(viewOnly){b.hidden=true;return;}
-  b.hidden=false;
-  else{b.innerHTML='📨 요청'+(pend?`<span class="badge">${pend}</span>`:'');}
+  b.hidden=false;b.innerHTML='📨 요청'+(pend?`<span class="badge">${pend}</span>`:'');
 }
 function openRequest(prefK){
   let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}
