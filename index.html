@@ -269,7 +269,8 @@ button{cursor:pointer}
 .wrange{font-size:12px;color:var(--muted);text-align:center;margin:-6px 0 8px}
 @media(max-width:400px){.wrooms{grid-template-columns:repeat(2,minmax(0,1fr))}.wday{grid-template-columns:48px minmax(0,1fr);padding:9px 8px 9px 6px}}
 /* 직원용 보기 모드: 달력만 크게 */
-body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn){display:none}
+body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn):not(#meBtn){display:none}
+.pin{font-size:22px;letter-spacing:.5em;text-align:center;width:7em!important}
 body.view-mode .legend{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
@@ -309,6 +310,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
       <button class="btn small" id="shareSetBtn" hidden>🔗 공유 설정</button>
       <button class="btn small" id="reqBtn">📨 변경 요청</button>
       <button class="btn small" id="swapBtn" hidden>🔁 휴무 교환</button>
+      <button class="btn small" id="meBtn" hidden>👤 로그인</button>
     </div>
   </header>
 
@@ -356,11 +358,11 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},days:{}};
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
     const work=WORK[p.work]?p.work:(p.baseOff==8?'w5':'w6');
@@ -389,6 +391,10 @@ function normalize(s){
     out.swaps.push({id:String(w.id||uid()),a:w.a,aDate:w.aDate,b:w.b,bDate:w.bDate,note:String(w.note||'').slice(0,80),status:st,t});
   });
   out.swaps=out.swaps.slice(-200);
+  const hex=v=>/^[0-9a-f]{64}$/.test(String(v||''))?String(v):'';
+  const a=s.auth&&typeof s.auth==='object'?s.auth:{};
+  Object.keys(a.pins||{}).forEach(pid=>{if(pids.has(pid)&&hex(a.pins[pid]))out.auth.pins[pid]=a.pins[pid];});
+  out.auth.admin=hex(a.admin);
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
     out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:''});
@@ -426,6 +432,7 @@ SEED.bookings=[
   {room:'노지',start:'2026-10-31',nights:1,label:''},{room:'노지',start:'2026-11-01',nights:1,label:''},{room:'노지',start:'2026-11-03',nights:1,label:''}];
 function applyViewMode(){
   document.body.classList.toggle('view-mode',viewOnly);
+  renderMeBtn();
   $('#legendHint').textContent=viewOnly?'날짜를 누르면 그 날 휴무·객실 상태가 보입니다':'날짜를 누르면 입실·휴무 입력 · 이름 칩을 끌어 다른 날짜에 놓으면 옮겨지고, 달력 밖에 놓으면 빠집니다';
   $('#viewBanner').hidden=!viewOnly;
   ['peopleBtn','autoBtn','backupBtn'].forEach(id=>$('#'+id).hidden=viewOnly);
@@ -466,13 +473,13 @@ let weekStart=null;
    1) claude.ai 아티팩트로 열리면 db 기능 사용
    2) 공개 웹(GitHub Pages 등)에서는 Firebase Realtime Database 주소(#db=…)로 공유
    3) 둘 다 없으면 이 기기(localStorage)에만 저장 */
-let db=null,cloudRef=null,saveTimer=null,readOnly=false,pushedOnce=false;
+let db=null,cloudRef=null,saveTimer=null,readOnly=false,pushedOnce=false,dirty=false;
 let fbUrl=null,fbES=null,viewOnly=false,fbAuto=false;
 const DB_KEY='shiftplan.db';
 let bin=null;const BIN_KEY='shiftplan.bin';let editor=false;
 function readShareHash(){
   const h=location.hash||'';
-  try{if(/[#&]edit\b/.test(h))localStorage.setItem('shiftplan.editor','1');if(/[#&]view\b/.test(h))localStorage.removeItem('shiftplan.editor');editor=localStorage.getItem('shiftplan.editor')==='1';}catch(e){}const m=h.match(/[#&]db=([^&]+)/);const b=h.match(/[#&]bin=([^&]+)/);const kk=h.match(/[#&]key=([^&]+)/);
+  try{if(/[#&]edit\b/.test(h))localStorage.setItem(WANT_KEY,'1');if(/[#&]view\b/.test(h)){localStorage.removeItem(WANT_KEY);localStorage.removeItem('shiftplan.editor');}wantEdit=localStorage.getItem(WANT_KEY)==='1'||localStorage.getItem('shiftplan.editor')==='1';if(wantEdit)localStorage.setItem(WANT_KEY,'1');localStorage.removeItem('shiftplan.editor');editor=wantEdit;}catch(e){}const m=h.match(/[#&]db=([^&]+)/);const b=h.match(/[#&]bin=([^&]+)/);const kk=h.match(/[#&]key=([^&]+)/);
   if(b){try{bin={url:decodeURIComponent(b[1]),key:kk?decodeURIComponent(kk[1]):''};if(!/^https:\/\/(json\.extendsclass\.com\/bin\/|jsonblob\.com\/api\/jsonBlob\/)[A-Za-z0-9-]+$/.test(bin.url))bin=null;else localStorage.setItem(BIN_KEY,JSON.stringify(bin));}catch(e){bin=null;}}
   else{try{bin=JSON.parse(localStorage.getItem(BIN_KEY)||'null');}catch(e){bin=null;}}
   if(m){try{fbUrl=cleanDbUrl(decodeURIComponent(m[1]));localStorage.setItem(DB_KEY,fbUrl);}catch(e){}}
@@ -488,7 +495,8 @@ function cleanDbUrl(u){
 function initFirebase(){
   if(!fbUrl||!('EventSource' in window))return;
   const apply=data=>{
-    if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();}}
+    if(dirty)return;
+    if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();evalMode();}}
     else if(!pushedOnce&&!viewOnly){pushedOnce=true;cloudSave();}
     setSync('cloud',viewOnly?'공유본 보기 전용':'기기 + 공유 저장 중');
   };
@@ -503,7 +511,8 @@ function initFirebase(){
 /* 계정 없는 공유 저장소: JSON bin (extendsclass / jsonblob). GET 폴링 + PUT */
 let binTimer=null,binBusy=false;
 function applyRemote(data,label){
-  if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();}}
+  if(dirty){setSync('cloud',label);return;}
+  if(data&&data.people){const n=normalize(JSON.parse(JSON.stringify(data)));if(JSON.stringify(n)!==JSON.stringify(state)){state=n;persistLocal();render();evalMode();}}
   setSync('cloud',label);
 }
 async function binFetch(){
@@ -521,7 +530,7 @@ function initBin(){
 async function binSave(){
   try{const h={'Content-Type':'application/json'};if(bin.key)h['Security-key']=bin.key;
     const r=await fetch(bin.url,{method:'PUT',headers:h,body:JSON.stringify(state)});
-    if(!r.ok)throw new Error(r.status);setSync('cloud','기기 + 공유 저장 중');}
+    if(!r.ok)throw new Error(r.status);dirty=false;setSync('cloud','기기 + 공유 저장 중');}
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 편집 링크로 열었는지 확인하세요.');}
 }
 async function remoteMutate(fn){
@@ -550,7 +559,7 @@ async function binCreate(){
 }
 async function fbSave(){
   try{const r=await fetch(fbUrl+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});
-    if(!r.ok)throw new Error(r.status);setSync('cloud','기기 + 공유 저장 중');}
+    if(!r.ok)throw new Error(r.status);dirty=false;setSync('cloud','기기 + 공유 저장 중');}
   catch(e){setSync('ro','공유 저장 실패');toast('공유 저장소에 저장하지 못했습니다. 규칙(rules)과 주소를 확인하세요.');}
 }
 function setSync(mode,text){const el=$('#sync');el.className='sync '+mode;el.querySelector('span').textContent=text;}
@@ -561,8 +570,9 @@ async function initCloud(){
     if(bin){initBin();applyViewMode();return;}
     /* 저장소에 심어 둔 공유 주소(share.json)가 있으면 자동 연결: 기본은 보기 모드, #edit 로 연 기기만 편집 */
     try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();
-      if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;if(!editor)viewOnly=readOnly=true;initFirebase();}catch(e){}}
-      else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};if(!editor)viewOnly=readOnly=true;initBin();}}}catch(e){}
+      if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;viewOnly=readOnly=!(wantEdit&&adminOk());initFirebase();}catch(e){}}
+      else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};viewOnly=readOnly=!(wantEdit&&adminOk());initBin();}
+      if((fbUrl||bin)&&wantEdit&&!adminOk())setTimeout(openAdminGate,300);}}catch(e){}
     applyViewMode();return;
   }
   try{db=await window.claude.use('db');}catch(e){db=null;}
@@ -584,12 +594,12 @@ async function initCloud(){
 function scheduleSave(){
   persistLocal();
   if(!(db||fbUrl||bin)||readOnly)return;
-  clearTimeout(saveTimer);saveTimer=setTimeout(cloudSave,500);
+  dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(cloudSave,500);
 }
 async function cloudSave(){
   if(readOnly)return;
-  if(!cloudRef){if(fbUrl)fbSave();else if(bin)binSave();return;}
-  try{await cloudRef.set(JSON.parse(JSON.stringify(state)));setSync('cloud','기기 + 공유 저장 중');}
+  if(!cloudRef){if(fbUrl)await fbSave();else if(bin)await binSave();return;}
+  try{await cloudRef.set(JSON.parse(JSON.stringify(state)));dirty=false;setSync('cloud','기기 + 공유 저장 중');}
   catch(e){
     if(e&&e.code==='invalid_argument'){readOnly=true;$('#roBanner').hidden=false;setSync('ro','읽기 전용');}
     else if(e&&e.code==='unavailable'){setTimeout(cloudSave,800+Math.random()*700);}
@@ -852,6 +862,96 @@ function openRequest(prefK){
   };
   draw();
 }
+/* ---------- 로그인 (이름 + 4자리 비밀번호, 서버에는 해시만) ---------- */
+const TOK_KEY='shiftplan.meTok',ADM_KEY='shiftplan.admTok',WANT_KEY='shiftplan.wantEdit';
+async function pinHash(scope,pin){
+  const txt='shiftplan:'+scope+':'+pin;
+  try{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(txt));return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,'0')).join('');}
+  catch(e){let h=0;for(const c of txt)h=(h*31+c.charCodeAt(0))>>>0;return h.toString(16).padStart(64,'0');}
+}
+function myId(){
+  let me='',tok='';try{me=localStorage.getItem(MY_KEY)||'';tok=localStorage.getItem(TOK_KEY)||'';}catch(e){}
+  if(!state.people.some(p=>p.id===me))return '';
+  const h=state.auth.pins[me];
+  if(!h)return '';
+  return tok===h?me:'';
+}
+function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();}
+function renderMeBtn(){
+  const b=$('#meBtn');if(!viewOnly||!(bin||fbUrl)){b.hidden=true;return;}
+  b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name:'👤 로그인';
+}
+function pinField(id,label){return `<div class="field"><label for="${id}">${label}</label><input class="pin" id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></div>`;}
+function openLogin(then){
+  let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}
+  if(!state.people.some(p=>p.id===me))me='';
+  const draw=()=>{
+    const has=me&&state.auth.pins[me];
+    openSheet(`<h2>로그인</h2><div class="sub">${me?(has?'비밀번호 4자리를 넣으세요.':'처음이시네요. 쓰실 비밀번호 4자리를 정하면 가입됩니다.'):'이름을 고르세요.'}</div>
+      <div class="field"><label for="lgWho">이름</label><select id="lgWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      ${me?(has?pinField('lgPin','비밀번호 4자리'):pinField('lgPin','새 비밀번호 4자리')+pinField('lgPin2','한 번 더')):''}
+      <div class="actions"><button class="btn" id="lgClose">닫기</button>${me?`<button class="btn primary" id="lgGo">${has?'로그인':'가입하고 로그인'}</button>`:''}</div><div class="msg" id="lgMsg"></div>
+      ${has?'<div class="msg">비밀번호를 잊었으면 담당자에게 초기화를 부탁하세요.</div>':''}`);
+    $('#lgClose').onclick=closeSheet;
+    $('#lgWho').onchange=e=>{me=e.target.value;draw();};
+    const pin=$('#lgPin');if(pin)pin.focus();
+    const go=$('#lgGo');if(go)go.onclick=async()=>{
+      const v=$('#lgPin').value;const bad=m=>{$('#lgMsg').className='msg bad';$('#lgMsg').textContent=m;};
+      if(!/^\d{4}$/.test(v))return bad('숫자 4자리여야 합니다.');
+      const h=await pinHash(me,v);
+      if(has){if(h!==state.auth.pins[me])return bad('비밀번호가 맞지 않습니다.');}
+      else{if($('#lgPin2').value!==v)return bad('두 번 넣은 비밀번호가 다릅니다.');
+        go.disabled=true;const ok=await remoteMutate(st=>{if(!st.auth.pins[me])st.auth.pins[me]=h;});if(!ok){go.disabled=false;return;}
+        if(state.auth.pins[me]!==h)return bad('그 사이 누군가 이 이름으로 먼저 가입했습니다. 담당자에게 확인하세요.');}
+      try{localStorage.setItem(MY_KEY,me);localStorage.setItem(TOK_KEY,h);}catch(e){}
+      closeSheet();renderSwapBtn();renderMeBtn();toast(`${state.people.find(p=>p.id===me).name}님으로 로그인했습니다`);if(then)then();
+    };
+  };
+  draw();
+}
+function openAccount(){
+  const me=myId();if(!me)return openLogin();
+  openSheet(`<h2>👤 ${pname(me)}</h2><div class="sub">이 폰은 ${pname(me)}님으로 로그인되어 있습니다.</div>
+    <div class="actions"><button class="btn" id="acClose">닫기</button><button class="btn danger" id="acOut">로그아웃</button></div>`);
+  $('#acClose').onclick=closeSheet;$('#acOut').onclick=()=>{logout();closeSheet();toast('로그아웃했습니다');};
+}
+/* 담당자 잠금: #edit 로 열어도 담당자 비밀번호를 맞춰야 편집 모드 */
+let wantEdit=false;
+function adminOk(){let t='';try{t=localStorage.getItem(ADM_KEY)||'';}catch(e){}return !!state.auth.admin&&t===state.auth.admin;}
+function evalMode(){
+  if(!(bin||fbUrl)||cloudRef)return;
+  const was=viewOnly;
+  const ed=wantEdit&&adminOk();
+  viewOnly=readOnly=!ed;
+  if(was!==viewOnly)applyViewMode();else{renderMeBtn();renderSwapBtn();}
+}
+function openAdminGate(){
+  const has=!!state.auth.admin;
+  openSheet(`<h2>담당자 확인</h2><div class="sub">${has?'담당자 비밀번호 4자리를 넣으면 이 폰이 편집 모드가 됩니다.':'아직 담당자 비밀번호가 없습니다. 지금 4자리를 정하면 이 폰이 편집 모드가 되고, 앞으로 이 비밀번호로 잠깁니다.'}</div>
+    ${pinField('adPin',has?'담당자 비밀번호':'새 담당자 비밀번호')}${has?'':pinField('adPin2','한 번 더')}
+    <div class="actions"><button class="btn" id="adClose">보기 모드로</button><button class="btn primary" id="adGo">${has?'편집 모드 켜기':'만들고 켜기'}</button></div><div class="msg" id="adMsg"></div>`);
+  $('#adPin').focus();
+  $('#adClose').onclick=()=>{wantEdit=false;try{localStorage.removeItem(WANT_KEY);}catch(e){}closeSheet();evalMode();};
+  $('#adGo').onclick=async()=>{
+    const v=$('#adPin').value;const bad=m=>{$('#adMsg').className='msg bad';$('#adMsg').textContent=m;};
+    if(!/^\d{4}$/.test(v))return bad('숫자 4자리여야 합니다.');
+    const h=await pinHash('admin',v);
+    if(has){if(h!==state.auth.admin)return bad('비밀번호가 맞지 않습니다.');}
+    else{if($('#adPin2').value!==v)return bad('두 번 넣은 비밀번호가 다릅니다.');const ok=await remoteMutate(st=>{if(!st.auth.admin)st.auth.admin=h;});if(!ok)return;if(state.auth.admin!==h)return bad('그 사이 다른 기기에서 담당자 비밀번호가 먼저 만들어졌습니다.');}
+    try{localStorage.setItem(ADM_KEY,h);}catch(e){}
+    closeSheet();evalMode();toast('편집 모드입니다');
+  };
+}
+function openAdminPinChange(){
+  openSheet(`<h2>담당자 비밀번호 변경</h2>${pinField('cpOld','현재 비밀번호')}${pinField('cpNew','새 비밀번호 4자리')}${pinField('cpNew2','한 번 더')}
+    <div class="actions"><button class="btn" id="cpClose">닫기</button><button class="btn primary" id="cpGo">변경</button></div><div class="msg" id="cpMsg"></div>`);
+  $('#cpClose').onclick=closeSheet;
+  $('#cpGo').onclick=async()=>{const bad=m=>{$('#cpMsg').className='msg bad';$('#cpMsg').textContent=m;};
+    const o=$('#cpOld').value,n=$('#cpNew').value;if(!/^\d{4}$/.test(n))return bad('새 비밀번호는 숫자 4자리여야 합니다.');if(n!==$('#cpNew2').value)return bad('두 번 넣은 새 비밀번호가 다릅니다.');
+    if(state.auth.admin&&await pinHash('admin',o)!==state.auth.admin)return bad('현재 비밀번호가 맞지 않습니다.');
+    const h=await pinHash('admin',n);const ok=await remoteMutate(st=>{st.auth.admin=h;});if(!ok)return;try{localStorage.setItem(ADM_KEY,h);}catch(e){}closeSheet();toast('담당자 비밀번호를 바꿨습니다');};
+}
+
 /* ---------- 휴무 교환 ---------- */
 const SW_LABEL={pending:'대기',accepted:'교환됨',rejected:'거절',cancelled:'취소',reverted:'되돌림'};
 function pname(pid){const p=state.people.find(x=>x.id===pid);return p?esc(p.name):'?';}
@@ -865,7 +965,6 @@ function applySwap(st,w){
   st.days[w.bDate].off[w.a]=ta;st.days[w.aDate].off[w.b]=tb;return '';
 }
 function revertSwap(st,w){const t={id:w.id,a:w.a,aDate:w.bDate,b:w.b,bDate:w.aDate};return applySwap(st,t);}
-function myId(){let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}return state.people.some(p=>p.id===me)?me:'';}
 function renderSwapBtn(){
   const b=$('#swapBtn');if(!viewOnly){b.hidden=true;return;}
   b.hidden=false;const me=myId();const n=state.swaps.filter(w=>w.status==='pending'&&w.b===me).length;
@@ -874,6 +973,7 @@ function renderSwapBtn(){
 function futureOffs(pid){return Object.keys(state.days).filter(k=>state.days[k].off[pid]&&k>=todayKey).sort().slice(0,60);}
 function openSwap(prefK){
   let me=myId();
+  if(!me)return openLogin(()=>openSwap(prefK));
   const draw=(sel)=>{
     sel=sel||{};
     const p=state.people.find(x=>x.id===me);
@@ -886,7 +986,7 @@ function openSwap(prefK){
     let bDate=sel.bDate!==undefined?sel.bDate:(prefK&&other&&state.days[prefK].off[other]?prefK:(otherOffs[0]||''));
     const row=w=>`<div class="req" data-w="${w.id}"><span class="st ${w.status}">${SW_LABEL[w.status]}</span><span><b>${pname(w.a)}</b> ${fmtK(w.aDate)} ⇄ <b>${pname(w.b)}</b> ${fmtK(w.bDate)}</span>${w.note?`<span class="msg" style="margin:0">${esc(w.note)}</span>`:''}`;
     openSheet(`<h2>휴무 교환</h2><div class="sub">내 휴무일과 동료의 휴무일을 서로 바꿉니다. 상대가 수락하면 바로 달력에 반영됩니다.</div>
-      <div class="field"><label for="swWho">내 이름</label><select id="swWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div class="msg" style="margin:0 0 6px">${pname(me)}님으로 로그인됨</div>
       ${p?`${received.length?`<h3 style="font-size:13px;color:var(--muted);margin:12px 0 6px">나에게 온 제안</h3><div style="display:flex;flex-direction:column;gap:6px">${received.map(w=>row(w)+`<span class="seg" style="margin-left:auto"><button data-a="accepted">수락</button><button data-a="rejected">거절</button></span></div>`).join('')}</div>`:''}
       <h3 style="font-size:13px;color:var(--muted);margin:14px 0 4px">새 교환 제안</h3>
       <div class="field"><label for="swA">내 휴무일</label><select id="swA">${myOffs.length?myOffs.map(k=>`<option value="${k}" ${k===aDate?'selected':''}>${fmtK(k)} ${TYPES[state.days[k].off[me]]}</option>`).join(''):'<option value="">앞으로 잡힌 휴무가 없습니다</option>'}</select></div>
@@ -897,7 +997,6 @@ function openSwap(prefK){
       ${sent.length?`<h3 style="font-size:13px;color:var(--muted);margin:16px 0 6px">내가 보낸 제안</h3><div style="display:flex;flex-direction:column;gap:6px">${sent.map(w=>row(w)+(w.status==='pending'?`<button class="btn small" data-a="cancelled" style="margin-left:auto">취소</button>`:'')+'</div>').join('')}</div>`:''}`
       :`<div class="actions"><button class="btn" id="swClose">닫기</button></div>`}`);
     $('#swClose').onclick=closeSheet;
-    $('#swWho').onchange=e=>{me=e.target.value;try{localStorage.setItem(MY_KEY,me);}catch(x){}draw();};
     const swB=$('#swB');if(swB)swB.onchange=()=>draw({aDate:$('#swA').value,other:swB.value,bDate:undefined});
     const send=$('#swSend');if(send)send.onclick=async()=>{
       const a=$('#swA').value,b=$('#swB').value,bd=$('#swBD').value,note=$('#swNote').value.trim();
@@ -1008,7 +1107,7 @@ function openDay(k){
 }
 
 function openPeople(focusId){
-  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));
+  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));const resetPins=new Set();
   const draw=()=>{
     openSheet(`<h2>직원 · 객실 관리</h2><div class="sub">주6일 근무자는 월 휴무 4회, 주5일 근무자는 8회가 기본이고 연차는 월 1회입니다. 기본을 넘겨 쉬면 '추가'로 넣으세요.</div>
       <div class="plist" id="plist"></div>
@@ -1016,7 +1115,9 @@ function openPeople(focusId){
       <h3 style="font-size:13px;color:var(--muted);margin:18px 0 6px">객실 (띠 순서대로)</h3>
       <div class="plist" id="rlist"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn small" id="addR">＋ 객실 추가</button></div>
+      ${(fbUrl||bin)?'<div class="actions" style="justify-content:flex-start;margin-top:14px"><button class="btn small" id="admPin">담당자 비밀번호 변경</button></div>':''}
       <div class="actions"><button class="btn" id="cancelP">취소</button><button class="btn primary" id="saveP">저장</button></div><div class="msg" id="pmsg"></div>`);
+    const ap=$('#admPin');if(ap)ap.onclick=openAdminPinChange;
     const rlist=$('#rlist');
     rdraft.forEach((r,i)=>{const el=document.createElement('div');el.className='pedit';
       el.innerHTML=`<div class="nm"><input value="${esc(r.name)}" maxlength="8" placeholder="객실 이름" aria-label="객실 이름"><button class="btn small" data-mv="-1" ${i===0?'disabled':''}>▲</button><button class="btn small" data-mv="1" ${i===rdraft.length-1?'disabled':''}>▼</button><button class="btn small danger" ${rdraft.length<=1?'disabled':''}>삭제</button></div>
@@ -1030,14 +1131,15 @@ function openPeople(focusId){
     const list=$('#plist');
     draft.forEach((p,i)=>{
       const el=document.createElement('div');el.className='pedit';
-      el.innerHTML=`<div class="nm"><input value="${esc(p.name)}" maxlength="12" placeholder="이름" aria-label="이름"><button class="btn small danger" ${draft.length<=1?'disabled':''}>삭제</button></div>
+      el.innerHTML=`<div class="nm"><input value="${esc(p.name)}" maxlength="12" placeholder="이름" aria-label="이름">${state.auth.pins[p.id]&&!resetPins.has(p.id)?'<button class="btn small" data-reset="1">비번 초기화</button>':resetPins.has(p.id)?'<span class="msg" style="margin:0">초기화 예정</span>':''}<button class="btn small danger" ${draft.length<=1?'disabled':''}>삭제</button></div>
         <div class="opts">
           <span class="sw-row">${PALETTE.map(c=>`<button class="swb${c===p.color?' on':''}" style="--c:${c}" data-c="${c}" aria-label="색 ${c}"></button>`).join('')}</span>
           <label>근무 <span class="seg"><button data-v="w6" class="${p.work==='w6'?'on':''}">주6일 · 휴무4</button><button data-v="w5" class="${p.work==='w5'?'on':''}">주5일 · 휴무8</button></span></label>
           <label>기본 휴무 <input type="number" min="0" max="31" value="${p.baseOff}" aria-label="기본 휴무 직접 입력"></label>
           <label>연차/월 <input type="number" min="0" max="31" value="${p.annual}" aria-label="월 연차"></label>
         </div>`;
-      const [nameIn,delBtn]=[el.querySelector('.nm input'),el.querySelector('.nm button')];
+      const [nameIn,delBtn]=[el.querySelector('.nm input'),el.querySelector('.nm button.danger')];
+      const rs=el.querySelector('[data-reset]');if(rs)rs.onclick=()=>{resetPins.add(p.id);draw();};
       nameIn.oninput=e=>p.name=e.target.value;
       delBtn.onclick=()=>{draft.splice(i,1);draw();};
       el.querySelectorAll('.swb').forEach(b=>b.onclick=()=>{p.color=b.dataset.c;el.querySelectorAll('.swb').forEach(x=>x.classList.toggle('on',x===b));});
@@ -1055,7 +1157,7 @@ function openPeople(focusId){
       if(names.some(n=>!n)){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 직원이 있습니다.';return;}
       if(rdraft.some(r=>!r.name.trim())){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 객실이 있습니다.';return;}
       draft.forEach(p=>p.name=p.name.trim());rdraft.forEach(r=>r.name=r.name.trim());
-      state.people=draft;state.rooms=rdraft;state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
+      state.people=draft;state.rooms=rdraft;resetPins.forEach(pid=>{delete state.auth.pins[pid];});state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
     };
   };
   draw();
@@ -1174,7 +1276,7 @@ function openShareSettings(){
     const base2=location.href.replace(/#.*$/,'');
     if(fbAuto||bin.auto){openSheet(`<h2>공유 설정</h2><div class="sub">저장소에 심어 둔 공유 주소로 자동 연결되어 있습니다. 15초마다 새로 고쳐지고, 입력하면 바로 올라갑니다.</div>
       <div class="field"><label>직원용 링크 (보기 전용)</label><input readonly value="${esc(base2)}"></div>
-      <div class="field"><label>담당자용 링크 (한 번 열면 그 기기는 계속 편집 모드)</label><input readonly value="${esc(base2+'#edit')}"></div>
+      <div class="field"><label>담당자용 링크 (열고 담당자 비밀번호를 넣으면 그 기기는 계속 편집 모드)</label><input readonly value="${esc(base2+'#edit')}"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:0"><button class="btn small" id="cpV">직원용 복사</button><button class="btn small" id="cpE">담당자용 복사</button></div>
       <div class="msg">편집 모드를 끄려면 ${esc(base2+'#view')} 를 한 번 열면 됩니다.</div>
       <div class="actions"><button class="btn primary" id="dbClose">닫기</button></div>`);
@@ -1321,6 +1423,7 @@ $('#backupBtn').onclick=openBackup;
 $('#shareSetBtn').onclick=openShareSettings;
 $('#reqBtn').onclick=()=>{if(!viewOnly)openRequests();};
 $('#swapBtn').onclick=()=>openSwap('');
+$('#meBtn').onclick=openAccount;
 window.addEventListener('hashchange',()=>{if(/[#&](db=|ro=)/.test(location.hash)||fbUrl)location.reload();});
 
 applySeed();pickStartMonth();
