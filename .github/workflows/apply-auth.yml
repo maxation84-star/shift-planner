@@ -1,0 +1,19 @@
+# auth-update.json 이 바뀌면 서버의 담당자 비밀번호 해시를 갱신
+name: Apply auth update
+on:
+  push:
+    branches: [main]
+    paths: ['auth-update.json']
+permissions:
+  contents: read
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          DB=$(python3 -c 'import json;print(json.load(open("share.json")).get("db",""))')
+          ADMIN=$(python3 -c 'import json;print(json.load(open("auth-update.json"))["auth"]["admin"])')
+          curl -sS -m 30 -X PATCH "$DB/auth.json" -H 'Content-Type: application/json' -d "{\"admin\":\"$ADMIN\"}"; echo
+          echo "== verify"; curl -sS -m 30 "$DB/auth.json"; echo
