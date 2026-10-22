@@ -271,6 +271,8 @@ button{cursor:pointer}
 /* 직원용 보기 모드: 달력만 크게 */
 body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn):not(#meBtn){display:none}
 .pin{font-size:22px;letter-spacing:.5em;text-align:center;width:7em!important}
+body.locked .main,body.locked #quick,body.locked .legend,body.locked #viewBanner,body.locked #roBanner{visibility:hidden}
+body.locked .overlay{background:var(--bg)}
 body.view-mode .legend{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
@@ -437,7 +439,7 @@ function applyViewMode(){
   $('#viewBanner').hidden=!viewOnly;
   ['peopleBtn','autoBtn','backupBtn'].forEach(id=>$('#'+id).hidden=viewOnly);
   $('#quick').hidden=viewOnly;
-  renderReqBtn();render();
+  renderReqBtn();render();checkGate();
 }
 function applySeed(){
   try{
@@ -572,7 +574,7 @@ async function initCloud(){
     try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();
       if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;viewOnly=readOnly=!(wantEdit&&adminOk());initFirebase();}catch(e){}}
       else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};viewOnly=readOnly=!(wantEdit&&adminOk());initBin();}
-      if((fbUrl||bin)&&wantEdit&&!adminOk())setTimeout(openAdminGate,300);}}catch(e){}
+      if((fbUrl||bin)&&wantEdit&&!adminOk()){document.body.classList.add('locked');gateLocked=true;setTimeout(openAdminGate,300);}}}catch(e){}
     applyViewMode();return;
   }
   try{db=await window.claude.use('db');}catch(e){db=null;}
@@ -806,9 +808,9 @@ function renderSide(){
 
 /* ---------- 모달 ---------- */
 function openSheet(html){$('#sheet').innerHTML=html;$('#overlay').hidden=false;document.body.style.overflow='hidden';const f=$('#sheet').querySelector('input,button');if(f)f.focus();}
-function closeSheet(){$('#overlay').hidden=true;document.body.style.overflow='';}
-$('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeSheet();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#overlay').hidden)closeSheet();});
+function closeSheet(){$('#overlay').hidden=true;$('#sheet').dataset.gate='';document.body.style.overflow='';}
+$('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay'&&$('#sheet').dataset.gate!=='1')closeSheet();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#overlay').hidden&&$('#sheet').dataset.gate!=='1')closeSheet();});
 let toastT;function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200);}
 
 function openDayView(k){
@@ -876,23 +878,24 @@ function myId(){
   if(!h)return '';
   return tok===h?me:'';
 }
-function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();}
+function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();checkGate();}
 function renderMeBtn(){
   const b=$('#meBtn');if(!viewOnly||!(bin||fbUrl)){b.hidden=true;return;}
   b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name:'👤 로그인';
 }
 function pinField(id,label){return `<div class="field"><label for="${id}">${label}</label><input class="pin" id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></div>`;}
-function openLogin(then){
+function openLogin(then,forced){
   let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}
   if(!state.people.some(p=>p.id===me))me='';
   const draw=()=>{
     const has=me&&state.auth.pins[me];
-    openSheet(`<h2>로그인</h2><div class="sub">${me?(has?'비밀번호 4자리를 넣으세요.':'처음이시네요. 쓰실 비밀번호 4자리를 정하면 가입됩니다.'):'이름을 고르세요.'}</div>
+    openSheet(`<h2>${forced?'근무표 플래너 · 로그인':'로그인'}</h2><div class="sub">${forced?'달력을 보려면 로그인하세요. ':''}${me?(has?'비밀번호 4자리를 넣으세요.':'처음이시네요. 쓰실 비밀번호 4자리를 정하면 가입됩니다.'):'이름을 고르세요.'}</div>
       <div class="field"><label for="lgWho">이름</label><select id="lgWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
       ${me?(has?pinField('lgPin','비밀번호 4자리'):pinField('lgPin','새 비밀번호 4자리')+pinField('lgPin2','한 번 더')):''}
-      <div class="actions"><button class="btn" id="lgClose">닫기</button>${me?`<button class="btn primary" id="lgGo">${has?'로그인':'가입하고 로그인'}</button>`:''}</div><div class="msg" id="lgMsg"></div>
-      ${has?'<div class="msg">비밀번호를 잊었으면 담당자에게 초기화를 부탁하세요.</div>':''}`);
-    $('#lgClose').onclick=closeSheet;
+      <div class="actions">${forced?'':'<button class="btn" id="lgClose">닫기</button>'}${me?`<button class="btn primary" id="lgGo">${has?'로그인':'가입하고 로그인'}</button>`:''}</div><div class="msg" id="lgMsg"></div>
+      ${has?'<div class="msg">비밀번호를 잊었으면 담당자에게 초기화를 부탁하세요.</div>':''}${forced?`<div class="msg">담당자는 주소 뒤에 #edit 를 붙여 여세요.</div>`:''}`);
+    $('#sheet').dataset.gate=forced?'1':'';
+    const lc=$('#lgClose');if(lc)lc.onclick=closeSheet;
     $('#lgWho').onchange=e=>{me=e.target.value;draw();};
     const pin=$('#lgPin');if(pin)pin.focus();
     const go=$('#lgGo');if(go)go.onclick=async()=>{
@@ -904,10 +907,17 @@ function openLogin(then){
         go.disabled=true;const ok=await remoteMutate(st=>{if(!st.auth.pins[me])st.auth.pins[me]=h;});if(!ok){go.disabled=false;return;}
         if(state.auth.pins[me]!==h)return bad('그 사이 누군가 이 이름으로 먼저 가입했습니다. 담당자에게 확인하세요.');}
       try{localStorage.setItem(MY_KEY,me);localStorage.setItem(TOK_KEY,h);}catch(e){}
-      closeSheet();renderSwapBtn();renderMeBtn();toast(`${state.people.find(p=>p.id===me).name}님으로 로그인했습니다`);if(then)then();
+      closeSheet();renderSwapBtn();renderMeBtn();checkGate();toast(`${state.people.find(p=>p.id===me).name}님으로 로그인했습니다`);if(then)then();
     };
   };
   draw();
+}
+/* 로그인 전에는 화면 잠금 (공유 연결된 보기 모드에서) */
+let gateLocked=false;
+function checkGate(){
+  const need=(bin||fbUrl)&&!cloudRef&&viewOnly&&!myId();
+  if(need&&!gateLocked){gateLocked=true;document.body.classList.add('locked');if(!(wantEdit&&!adminOk()))openLogin(null,true);}
+  else if(!need&&gateLocked){gateLocked=false;document.body.classList.remove('locked');if(!$('#overlay').hidden&&$('#sheet').dataset.gate==='1')closeSheet();}
 }
 function openAccount(){
   const me=myId();if(!me)return openLogin();
@@ -924,6 +934,7 @@ function evalMode(){
   const ed=wantEdit&&adminOk();
   viewOnly=readOnly=!ed;
   if(was!==viewOnly)applyViewMode();else{renderMeBtn();renderSwapBtn();}
+  checkGate();
 }
 function openAdminGate(){
   const has=!!state.auth.admin;
@@ -931,7 +942,8 @@ function openAdminGate(){
     ${pinField('adPin',has?'담당자 비밀번호':'새 담당자 비밀번호')}${has?'':pinField('adPin2','한 번 더')}
     <div class="actions"><button class="btn" id="adClose">보기 모드로</button><button class="btn primary" id="adGo">${has?'편집 모드 켜기':'만들고 켜기'}</button></div><div class="msg" id="adMsg"></div>`);
   $('#adPin').focus();
-  $('#adClose').onclick=()=>{wantEdit=false;try{localStorage.removeItem(WANT_KEY);}catch(e){}closeSheet();evalMode();};
+  $('#sheet').dataset.gate='1';
+  $('#adClose').onclick=()=>{wantEdit=false;try{localStorage.removeItem(WANT_KEY);}catch(e){}closeSheet();gateLocked=false;evalMode();};
   $('#adGo').onclick=async()=>{
     const v=$('#adPin').value;const bad=m=>{$('#adMsg').className='msg bad';$('#adMsg').textContent=m;};
     if(!/^\d{4}$/.test(v))return bad('숫자 4자리여야 합니다.');
@@ -939,7 +951,7 @@ function openAdminGate(){
     if(has){if(h!==state.auth.admin)return bad('비밀번호가 맞지 않습니다.');}
     else{if($('#adPin2').value!==v)return bad('두 번 넣은 비밀번호가 다릅니다.');const ok=await remoteMutate(st=>{if(!st.auth.admin)st.auth.admin=h;});if(!ok)return;if(state.auth.admin!==h)return bad('그 사이 다른 기기에서 담당자 비밀번호가 먼저 만들어졌습니다.');}
     try{localStorage.setItem(ADM_KEY,h);}catch(e){}
-    closeSheet();evalMode();toast('편집 모드입니다');
+    closeSheet();gateLocked=false;document.body.classList.remove('locked');evalMode();toast('편집 모드입니다');
   };
 }
 function openAdminPinChange(){
