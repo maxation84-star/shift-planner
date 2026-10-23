@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Stamp build version
+        run: |
+          V="${GITHUB_SHA::7}"
+          sed -i "s/__BUILD__/$V/g" index.html sw.js
+          printf '{"v":"%s"}\n' "$V" > version.json
+          echo "build $V"
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
