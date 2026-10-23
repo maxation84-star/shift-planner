@@ -1442,9 +1442,29 @@ applySeed();pickStartMonth();
 initCloud();
 render();
 if(viewOnly)applyViewMode();
+/* ---------- 자동 업데이트: 배포 버전이 바뀌면 스스로 새로 고침 ---------- */
+const APP_VERSION='fa12702';
+let swReg=null;
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
-  try{navigator.serviceWorker.register('sw.js').catch(()=>{});}catch(e){}
+  try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;}).catch(()=>{});
+    let reloading=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloading)return;reloading=true;if(!$('#overlay').hidden&&$('#sheet').dataset.gate!=='1')return;location.reload();});}catch(e){}
 }
+async function checkUpdate(){
+  if(window.claude||!/^[0-9a-f]{7}$/.test(APP_VERSION)||!location.protocol.startsWith('http'))return; /* 배포본(해시 스탬프)에서만 */
+  try{
+    const r=await fetch('version.json?v='+Date.now(),{cache:'no-store'});if(!r.ok)return;
+    const j=await r.json();const v=String(j.v||'');if(!v||v===APP_VERSION)return;
+    let done='';try{done=sessionStorage.getItem('shiftplan.reloadedFor')||'';}catch(e){}
+    if(done===v)return;
+    if(!$('#overlay').hidden&&$('#sheet').dataset.gate!=='1')return; /* 입력 중이면 다음 기회에 */
+    try{sessionStorage.setItem('shiftplan.reloadedFor',v);}catch(e){}
+    if(swReg){try{await swReg.update();}catch(e){}}
+    setSync('cloud','새 버전으로 바꾸는 중…');setTimeout(()=>location.reload(),300);
+  }catch(e){}
+}
+setTimeout(checkUpdate,1500);
+setInterval(checkUpdate,10*60*1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){checkUpdate();if(swReg){try{swReg.update();}catch(e){}}}});
 })();
 </script>
 <!--ARTIFACT-END-->
