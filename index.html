@@ -362,11 +362,12 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},settings:{weekend:'satsun'},days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},settings:{weekend:'satsun'},days:{}};
+  if(s.settings&&s.settings.weekend==='frisat')out.settings.weekend='frisat';
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
     const work=WORK[p.work]?p.work:(p.baseOff==8?'w5':'w6');
@@ -634,12 +635,16 @@ function changeBookings(fn){if(viewOnly){toast('보기 전용 링크에서는 �
 function changeDay(k,fn){if(viewOnly){toast('보기 전용 링크에서는 입력할 수 없습니다');return;}const d=JSON.parse(JSON.stringify(getDay(k)));fn(d);setDay(k,d);scheduleSave();render();}
 
 /* ---------- 집계 ---------- */
+function isWeekend(wd){return (state.settings&&state.settings.weekend==='frisat')?(wd===5||wd===6):(wd===0||wd===6);}
+function weekendLabel(){return (state.settings&&state.settings.weekend==='frisat')?'금·토':'토·일';}
 function monthStats(y,m){
   const keys=monthKeys(y,m);
   return state.people.map(p=>{
     const r={p,off:[],annual:[],extra:[]};
     keys.forEach(k=>{const t=getDay(k).off[p.id];if(t)r[t].push(parseInt(k.slice(8),10));});
     r.total=r.off.length+r.annual.length+r.extra.length;
+    const all=[...r.off,...r.annual,...r.extra];
+    r.weekend=all.filter(d=>isWeekend(dow(y,m,d))).length;r.weekday=all.length-r.weekend;
     r.offLeft=p.baseOff-r.off.length;
     r.annualLeft=p.annual-r.annual.length;
     return r;
@@ -778,9 +783,9 @@ function renderSide(){
     <div class="dates" style="margin-top:4px">근무일 ${dim(view.y,view.m)}일 중</div>`;
   side.appendChild(tp);
   const tbl=document.createElement('div');tbl.className='panel keep';
-  tbl.innerHTML=`<h3>직원별 한눈에</h3><table class="sum"><thead><tr><th>이름</th><th>휴무</th><th>연차</th><th>추가</th><th>합</th></tr></thead><tbody>${st.map(r=>{
+  tbl.innerHTML=`<h3>직원별 한눈에</h3><table class="sum"><thead><tr><th>이름</th><th>휴무</th><th>연차</th><th>평일</th><th title="${weekendLabel()}">주말</th><th>합</th></tr></thead><tbody>${st.map(r=>{
     const over=r.off.length>r.p.baseOff;const left=r.p.baseOff-r.off.length;
-    return `<tr><td><i style="background:${r.p.color}"></i>${esc(r.p.name)}<small>${WORK[r.p.work].label}</small></td><td class="${over?'bad':left===0?'ok':''}">${r.off.length}/${r.p.baseOff}</td><td class="${r.annual.length>=r.p.annual?'ok':''}">${r.annual.length}/${r.p.annual}</td><td>${r.extra.length||''}</td><td><b>${r.total}</b></td></tr>`;}).join('')}</tbody></table>`;
+    return `<tr><td><i style="background:${r.p.color}"></i>${esc(r.p.name)}<small>${WORK[r.p.work].label}</small></td><td class="${over?'bad':left===0?'ok':''}">${r.off.length}/${r.p.baseOff}</td><td class="${r.annual.length>=r.p.annual?'ok':''}">${r.annual.length}/${r.p.annual}</td><td>${r.weekday}</td><td>${r.weekend}</td><td><b>${r.total}</b>${r.extra.length?`<small>+${r.extra.length}</small>`:''}</td></tr>`;}).join('')}</tbody></table><div class="msg" style="margin-top:4px">주말 = ${weekendLabel()} · 합계는 휴무+연차+추가</div>`;
   side.appendChild(tbl);
   st.forEach(r=>{
     const p=r.p;const el=document.createElement('div');el.className='panel pcard';el.style.setProperty('--pc',p.color);
@@ -794,6 +799,7 @@ function renderSide(){
         <div class="stat"><div class="l">연차</div><div class="v">${r.annual.length}<small>/${p.annual}</small></div>${left(r.annualLeft,'일')}</div>
         <div class="stat"><div class="l">추가·합계</div><div class="v">${r.extra.length}<small> · 총 ${r.total}</small></div><span class="r">추가 ${r.extra.length}일</span></div>
       </div>
+      <div class="dates" style="font-variant-numeric:tabular-nums"><b>평일 ${r.weekday}</b> · <b>주말 ${r.weekend}</b> <span>(${weekendLabel()})</span></div>
       <div class="dates">휴무 ${list(r.off)}${r.annual.length?`<br>연차 ${list(r.annual)}`:''}${r.extra.length?`<br>추가 ${list(r.extra)}`:''}</div>`;
     el.querySelector('.edit').onclick=()=>openPeople(p.id);
     side.appendChild(el);
@@ -1121,7 +1127,7 @@ function openDay(k){
 }
 
 function openPeople(focusId){
-  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));const resetPins=new Set();
+  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));const resetPins=new Set();let wkDraft=(state.settings||{}).weekend||'satsun';
   const draw=()=>{
     openSheet(`<h2>직원 · 객실 관리</h2><div class="sub">주6일 근무자는 월 휴무 4회, 주5일 근무자는 8회가 기본이고 연차는 월 1회입니다. 기본을 넘겨 쉬면 '추가'로 넣으세요.</div>
       <div class="plist" id="plist"></div>
@@ -1129,9 +1135,12 @@ function openPeople(focusId){
       <h3 style="font-size:13px;color:var(--muted);margin:18px 0 6px">객실 (띠 순서대로)</h3>
       <div class="plist" id="rlist"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn small" id="addR">＋ 객실 추가</button></div>
+      <h3 style="font-size:13px;color:var(--muted);margin:18px 0 6px">주말 기준</h3>
+      <div class="seg" id="wkSeg"><button data-v="satsun" class="${(state.settings||{}).weekend!=='frisat'?'on':''}">토·일</button><button data-v="frisat" class="${(state.settings||{}).weekend==='frisat'?'on':''}">금·토</button></div>
       ${(fbUrl||bin)?'<div class="actions" style="justify-content:flex-start;margin-top:14px"><button class="btn small" id="admPin">담당자 비밀번호 변경</button></div>':''}
       <div class="actions"><button class="btn" id="cancelP">취소</button><button class="btn primary" id="saveP">저장</button></div><div class="msg" id="pmsg"></div>`);
     const ap=$('#admPin');if(ap)ap.onclick=openAdminPinChange;
+    $('#wkSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{wkDraft=b.dataset.v;$('#wkSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));});
     const rlist=$('#rlist');
     rdraft.forEach((r,i)=>{const el=document.createElement('div');el.className='pedit';
       el.innerHTML=`<div class="nm"><input value="${esc(r.name)}" maxlength="8" placeholder="객실 이름" aria-label="객실 이름"><button class="btn small" data-mv="-1" ${i===0?'disabled':''}>▲</button><button class="btn small" data-mv="1" ${i===rdraft.length-1?'disabled':''}>▼</button><button class="btn small danger" ${rdraft.length<=1?'disabled':''}>삭제</button></div>
@@ -1171,7 +1180,7 @@ function openPeople(focusId){
       if(names.some(n=>!n)){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 직원이 있습니다.';return;}
       if(rdraft.some(r=>!r.name.trim())){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 객실이 있습니다.';return;}
       draft.forEach(p=>p.name=p.name.trim());rdraft.forEach(r=>r.name=r.name.trim());
-      state.people=draft;state.rooms=rdraft;resetPins.forEach(pid=>{delete state.auth.pins[pid];});state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
+      state.people=draft;state.rooms=rdraft;resetPins.forEach(pid=>{delete state.auth.pins[pid];});state.settings={weekend:wkDraft};state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
     };
   };
   draw();
@@ -1226,7 +1235,7 @@ function autoAssign(y,m,o){
 function monthText(){
   const st=monthStats(view.y,view.m);const L=[`${view.y}년 ${view.m+1}월 휴무표`];
   const f=arr=>arr.map(d=>`${d}(${DOW[dow(view.y,view.m,d)]})`).join(' ');
-  st.forEach(r=>{L.push('',`■ ${r.p.name}(${WORK[r.p.work].label})  휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}`);
+  st.forEach(r=>{L.push('',`■ ${r.p.name}(${WORK[r.p.work].label})  휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''} · 평일 ${r.weekday} 주말 ${r.weekend}`);
     if(r.off.length)L.push(`  휴무: ${f(r.off)}`);if(r.annual.length)L.push(`  연차: ${f(r.annual)}`);if(r.extra.length)L.push(`  추가: ${f(r.extra)}`);});
   const rl=state.rooms.map(r=>{const ins=monthKeys(view.y,view.m).map(k=>{const {cover}=laneState(r.id,k);return cover&&cover.start===k?`${parseInt(k.slice(8),10)}일 ${cover.kind==='work'?'공사':cover.nights>=2?'연박':'입실'} ${cover.nights}박`:null;}).filter(Boolean);return ins.length?`${r.name}: ${ins.join(', ')}`:null;}).filter(Boolean);
   if(rl.length&&!viewOnly)L.push('',...rl);
@@ -1417,7 +1426,7 @@ async function renderCalendarImage(){
   st.forEach((r,i)=>{const col=i%2,row=Math.floor(i/2);const x=M+col*(W-M*2)/2,ty=yy+row*30+20;
     ctx.fillStyle=r.p.color;rr(ctx,x,ty-13,16,16,8);ctx.fill();
     ctx.fillStyle=INK;ctx.font='bold 14px '+font;ctx.fillText(r.p.name,x+24,ty);
-    ctx.fillStyle=MUTED;ctx.font='13px '+font;ctx.fillText(`${WORK[r.p.work].label} · 휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}${r.offLeft>0?` · ${r.offLeft}일 남음`:''}`,x+24+ctx.measureText(r.p.name).width+28,ty);});
+    ctx.fillStyle=MUTED;ctx.font='13px '+font;ctx.fillText(`${WORK[r.p.work].label} · 휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''} · 평일 ${r.weekday} 주말 ${r.weekend}${r.offLeft>0?` · ${r.offLeft}일 남음`:''}`,x+24+ctx.measureText(r.p.name).width+28,ty);});
   yy+=sumRows*30+28;ctx.fillStyle=MUTED;ctx.font='12px '+font;ctx.fillText((showR?'객실 띠: 빨강 = 연박 · 흰색 = 입실(단박) · 빈칸 = 공실 · 주황 빗금 = 공사   |   ':'')+'직원: 색 채움 = 휴무 · 테두리 = 연차 · 점선 = 추가휴무',M,yy);
   return new Promise(res=>cv.toBlob(b=>res(b),'image/png'));
 }
