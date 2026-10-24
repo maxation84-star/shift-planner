@@ -20,7 +20,7 @@
   --bg:#eef1f5; --paper:#ffffff; --paper-2:#f6f8fb; --ink:#172033; --muted:#5f6b7f;
   --line:#d5dce6; --line-soft:#e8edf3;
   --accent:#1f5f8b; --accent-ink:#ffffff; --accent-soft:#e3eef7;
-  --sun:#c8322b; --sat:#2b5fb8; --today:#fff4d6;
+  --sun:#c8322b; --sat:#2b5fb8; --today:#fff4d6; --sun-bg:#fff1f1; --sat-bg:#eef4ff;
   --tag-stay:#6b4fbb; --tag-work:#d9731a; --tag-empty:#6f7c92;
   --ok:#2a8f5a; --warn:#c77d05; --bad:#c8322b;
   --bk-multi:#f9c3c3; --bk-single:#ffffff; --bk-line:#c9d1dc;
@@ -111,6 +111,8 @@ button{cursor:pointer}
 .lane{border-bottom:1px dotted var(--line-soft)}
 .cell{background:var(--paper);min-height:98px;padding:5px 5px 6px;display:flex;flex-direction:column;gap:3px;text-align:left;border:0;position:relative;min-width:0;transition:background .12s}
 .cell:hover{background:var(--paper-2)}
+.cell.d0{background:var(--sun-bg)} .cell.d6{background:var(--sat-bg)}
+.cell.d0:hover{background:#ffe6e6} .cell.d6:hover{background:#e2ecff}
 .cell.out{background:var(--paper-2);color:var(--muted);opacity:.55}
 .cell.today{background:var(--today)}
 .cell .num{font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:4px}
@@ -249,6 +251,7 @@ button{cursor:pointer}
 .wk{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .wday{display:grid;grid-template-columns:56px minmax(0,1fr);gap:4px 10px;padding:10px 10px 10px 8px;border-top:1px solid var(--line-soft);text-align:left;background:var(--paper);border-left:0;border-right:0;border-bottom:0;width:100%;color:inherit}
 .wday:first-child{border-top:0}
+.wday.d0{background:var(--sun-bg)} .wday.d6{background:var(--sat-bg)}
 .wday.today{background:var(--today)}
 .wday .wdate{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:2px}
 .wday .wdate b{font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
@@ -1403,7 +1406,7 @@ async function renderCalendarImage(){
     if(showR){ctx.fillStyle='#f4f6f9';ctx.fillRect(M,yy,LW,rh);ctx.strokeRect(M+.5,yy+.5,LW,rh);}
     if(showR)state.rooms.forEach((r,ri)=>{ctx.fillStyle=r.color;ctx.fillRect(M+2,yy+36+ri*(LH+3),3,LH);ctx.fillStyle=MUTED;ctx.font='bold 11px '+font;let nm=r.name;while(ctx.measureText(nm).width>LW-10&&nm.length>1)nm=nm.slice(0,-1);ctx.fillText(nm,M+8,yy+36+ri*(LH+3)+13);});
     for(let c=0;c<7;c++){const x=M+LW+cw*c;const d=w*7+c-first+1;
-      ctx.fillStyle=(d<1||d>n)?'#f4f6f9':'#ffffff';ctx.fillRect(x,yy,cw,rh);ctx.strokeRect(x+.5,yy+.5,cw,rh);
+      ctx.fillStyle=(d<1||d>n)?'#f4f6f9':c===0?'#fff1f1':c===6?'#eef4ff':'#ffffff';ctx.fillRect(x,yy,cw,rh);ctx.strokeRect(x+.5,yy+.5,cw,rh);
       if(d<1||d>n)continue;
       const k=key(y,m,d),day=getDay(k);let cy=yy+8;
       if(k===todayKey){ctx.fillStyle='#fff4d6';ctx.fillRect(x+1,yy+1,cw-1,rh-1);}
