@@ -270,6 +270,7 @@ button{cursor:pointer}
 @media(max-width:400px){.wrooms{grid-template-columns:repeat(2,minmax(0,1fr))}.wday{grid-template-columns:48px minmax(0,1fr);padding:9px 8px 9px 6px}}
 /* 직원용 보기 모드: 달력만 크게 */
 body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn):not(#meBtn){display:none}
+#meBtn.adm{border-color:var(--accent);color:var(--accent)}
 .pin{font-size:22px;letter-spacing:.5em;text-align:center;width:7em!important}
 body.locked .main,body.locked #quick,body.locked .legend,body.locked #viewBanner,body.locked #roBanner{visibility:hidden}
 body.locked .overlay{background:var(--bg)}
@@ -362,11 +363,11 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},settings:{weekend:'satsun'},days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[]},settings:{weekend:'satsun'},days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:''},settings:{weekend:'satsun'},days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[]},settings:{weekend:'satsun'},days:{}};
   if(s.settings&&s.settings.weekend==='frisat')out.settings.weekend='frisat';
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
@@ -400,6 +401,7 @@ function normalize(s){
   const a=s.auth&&typeof s.auth==='object'?s.auth:{};
   Object.keys(a.pins||{}).forEach(pid=>{if(pids.has(pid)&&hex(a.pins[pid]))out.auth.pins[pid]=a.pins[pid];});
   out.auth.admin=hex(a.admin);
+  out.auth.admins=(Array.isArray(a.admins)?a.admins:Object.values(a.admins||{})).filter(pid=>pids.has(pid));
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
     out.bookings.push({id:String(b.id||uid()),room:b.room,start:b.start,nights:clampInt(b.nights,1,90,1),kind:b.kind==='work'?'work':'stay',label:''});
@@ -575,8 +577,8 @@ async function initCloud(){
     if(bin){initBin();applyViewMode();return;}
     /* 저장소에 심어 둔 공유 주소(share.json)가 있으면 자동 연결: 기본은 보기 모드, #edit 로 연 기기만 편집 */
     try{const r=await fetch('share.json?v='+Date.now(),{cache:'no-store'});if(r.ok){const j=await r.json();
-      if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;viewOnly=readOnly=!(wantEdit&&adminOk());initFirebase();}catch(e){}}
-      else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};viewOnly=readOnly=!(wantEdit&&adminOk());initBin();}
+      if(j&&j.db){try{fbUrl=cleanDbUrl(j.db);fbAuto=true;viewOnly=readOnly=!((wantEdit&&adminOk())||isAdminUser());initFirebase();}catch(e){}}
+      else if(j&&j.bin){bin={url:String(j.bin),key:String(j.key||''),auto:true};viewOnly=readOnly=!((wantEdit&&adminOk())||isAdminUser());initBin();}
       if((fbUrl||bin)&&wantEdit&&!adminOk()){document.body.classList.add('locked');gateLocked=true;setTimeout(openAdminGate,300);}}}catch(e){}
     applyViewMode();return;
   }
@@ -886,10 +888,10 @@ function myId(){
   if(!h)return '';
   return tok===h?me:'';
 }
-function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();checkGate();}
+function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();evalMode();checkGate();}
 function renderMeBtn(){
-  const b=$('#meBtn');if(!viewOnly||!(bin||fbUrl)){b.hidden=true;return;}
-  b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name:'👤 로그인';
+  const b=$('#meBtn');if(!(bin||fbUrl)||(!viewOnly&&!myId())){b.hidden=true;return;}
+  b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name+(state.auth.admins.includes(me)?' (관리자)':''):'👤 로그인';b.classList.toggle('adm',!!me&&state.auth.admins.includes(me));
 }
 function pinField(id,label){return `<div class="field"><label for="${id}">${label}</label><input class="pin" id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></div>`;}
 function openLogin(then,forced){
@@ -915,7 +917,7 @@ function openLogin(then,forced){
         go.disabled=true;const ok=await remoteMutate(st=>{if(!st.auth.pins[me])st.auth.pins[me]=h;});if(!ok){go.disabled=false;return;}
         if(state.auth.pins[me]!==h)return bad('그 사이 누군가 이 이름으로 먼저 가입했습니다. 담당자에게 확인하세요.');}
       try{localStorage.setItem(MY_KEY,me);localStorage.setItem(TOK_KEY,h);}catch(e){}
-      closeSheet();renderSwapBtn();renderMeBtn();checkGate();toast(`${state.people.find(p=>p.id===me).name}님으로 로그인했습니다`);if(then)then();
+      closeSheet();renderSwapBtn();renderMeBtn();evalMode();checkGate();toast(`${state.people.find(p=>p.id===me).name}님으로 로그인했습니다${state.auth.admins.includes(me)?' · 관리자 편집 모드':''}`);if(then)then();
     };
   };
   draw();
@@ -936,10 +938,11 @@ function openAccount(){
 /* 담당자 잠금: #edit 로 열어도 담당자 비밀번호를 맞춰야 편집 모드 */
 let wantEdit=false;
 function adminOk(){let t='';try{t=localStorage.getItem(ADM_KEY)||'';}catch(e){}return !!state.auth.admin&&t===state.auth.admin;}
+function isAdminUser(){const me=myId();return !!me&&state.auth.admins.includes(me);}
 function evalMode(){
   if(!(bin||fbUrl)||cloudRef)return;
   const was=viewOnly;
-  const ed=wantEdit&&adminOk();
+  const ed=(wantEdit&&adminOk())||isAdminUser();
   viewOnly=readOnly=!ed;
   if(was!==viewOnly)applyViewMode();else{renderMeBtn();renderSwapBtn();}
   checkGate();
@@ -1127,7 +1130,7 @@ function openDay(k){
 }
 
 function openPeople(focusId){
-  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));const resetPins=new Set();let wkDraft=(state.settings||{}).weekend||'satsun';
+  const draft=JSON.parse(JSON.stringify(state.people));const rdraft=JSON.parse(JSON.stringify(state.rooms));const resetPins=new Set();let wkDraft=(state.settings||{}).weekend||'satsun';const admDraft=new Set(state.auth.admins);
   const draw=()=>{
     openSheet(`<h2>직원 · 객실 관리</h2><div class="sub">주6일 근무자는 월 휴무 4회, 주5일 근무자는 8회가 기본이고 연차는 월 1회입니다. 기본을 넘겨 쉬면 '추가'로 넣으세요.</div>
       <div class="plist" id="plist"></div>
@@ -1160,9 +1163,11 @@ function openPeople(focusId){
           <label>근무 <span class="seg"><button data-v="w6" class="${p.work==='w6'?'on':''}">주6일 · 휴무4</button><button data-v="w5" class="${p.work==='w5'?'on':''}">주5일 · 휴무8</button></span></label>
           <label>기본 휴무 <input type="number" min="0" max="31" value="${p.baseOff}" aria-label="기본 휴무 직접 입력"></label>
           <label>연차/월 <input type="number" min="0" max="31" value="${p.annual}" aria-label="월 연차"></label>
+          <label title="로그인하면 바로 편집 모드"><input type="checkbox" data-adm ${admDraft.has(p.id)?'checked':''}> 관리자</label>
         </div>`;
       const [nameIn,delBtn]=[el.querySelector('.nm input'),el.querySelector('.nm button.danger')];
       const rs=el.querySelector('[data-reset]');if(rs)rs.onclick=()=>{resetPins.add(p.id);draw();};
+      el.querySelector('[data-adm]').onchange=e=>{if(e.target.checked)admDraft.add(p.id);else admDraft.delete(p.id);};
       nameIn.oninput=e=>p.name=e.target.value;
       delBtn.onclick=()=>{draft.splice(i,1);draw();};
       el.querySelectorAll('.swb').forEach(b=>b.onclick=()=>{p.color=b.dataset.c;el.querySelectorAll('.swb').forEach(x=>x.classList.toggle('on',x===b));});
@@ -1180,7 +1185,7 @@ function openPeople(focusId){
       if(names.some(n=>!n)){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 직원이 있습니다.';return;}
       if(rdraft.some(r=>!r.name.trim())){$('#pmsg').className='msg bad';$('#pmsg').textContent='이름이 비어 있는 객실이 있습니다.';return;}
       draft.forEach(p=>p.name=p.name.trim());rdraft.forEach(r=>r.name=r.name.trim());
-      state.people=draft;state.rooms=rdraft;resetPins.forEach(pid=>{delete state.auth.pins[pid];});state.settings={weekend:wkDraft};state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
+      state.people=draft;state.rooms=rdraft;resetPins.forEach(pid=>{delete state.auth.pins[pid];});state.settings={weekend:wkDraft};state.auth.admins=[...admDraft];state=normalize(state);scheduleSave();render();closeSheet();toast('직원·객실 정보를 저장했습니다');
     };
   };
   draw();
