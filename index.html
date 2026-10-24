@@ -274,6 +274,8 @@ body.view-mode .tools .btn:not(#shareBtn):not(#swapBtn):not(#meBtn){display:none
 body.locked .main,body.locked #quick,body.locked .legend,body.locked #viewBanner,body.locked #roBanner{visibility:hidden}
 body.locked .overlay{background:var(--bg)}
 body.view-mode .legend{display:none}
+body.view-mode .cal,body.view-mode .cal-head{grid-template-columns:repeat(7,minmax(0,1fr))}
+body.view-mode .rsp,body.view-mode .rlab,body.view-mode .lanes{display:none}
 body.view-mode #quick,body.view-mode .brand small{display:none}
 body.view-mode .main{grid-template-columns:minmax(0,1fr)}
 body.view-mode .side{position:static;order:1;flex-direction:row;flex-wrap:wrap;max-height:none;overflow:visible}
@@ -325,7 +327,7 @@ body.view-mode .side .panel.keep{display:block;flex:1 1 280px}
     <section class="cal-wrap">
       <div class="wrange" id="wrange" hidden></div>
       <div class="wk" id="week" hidden></div>
-      <div class="cal-head" id="calHead"><div class="d0">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="d6">토</div></div>
+      <div class="cal-head" id="calHead"><div class="rsp"></div><div class="d0">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="d6">토</div></div>
       <div class="cal" id="cal" role="grid"></div>
       <div class="legend">
         <span><i class="sw" style="background:var(--bk-multi);border-radius:6px 0 0 6px;width:18px"></i>연박</span><span><i class="sw" style="background:var(--bk-single);box-shadow:inset 0 0 0 1.5px var(--bk-line);border-radius:6px 0 0 6px;width:18px"></i>단박</span><span>빈칸 = 공실 (퇴실일엔 표시 없음)</span><span><i class="sw work"></i>공사</span>
@@ -666,7 +668,7 @@ function renderWeek(){
       const t=!cover?'공실':cover.kind==='work'?'공사':cover.nights>=2?(cover.start===k?`연박 ${cover.nights}박`:'연박'):'입실';
       return `<span class="wr ${cls}" style="--rc:${r.color}">${esc(r.name)} ${t}</span>`;}).join('');
     const offs=state.people.filter(p=>day.off[p.id]).map(p=>`<span class="chip ${day.off[p.id]}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span></span>`).join('');
-    el.innerHTML=`<div class="wdate"><b>${d}</b><span>${DOW[i]}</span></div><div class="wbody"><div class="wrooms">${rooms}</div><div class="woffs">${offs||'<span class="none">휴무 없음</span>'}</div>${day.memo?`<div class="memo">${esc(day.memo)}</div>`:''}</div>`;
+    el.innerHTML=`<div class="wdate"><b>${d}</b><span>${DOW[i]}</span></div><div class="wbody">${viewOnly?'':`<div class="wrooms">${rooms}</div>`}<div class="woffs">${offs||'<span class="none">휴무 없음</span>'}</div>${day.memo?`<div class="memo">${esc(day.memo)}</div>`:''}</div>`;
     el.onclick=()=>{if(suppressClick)return;if(quickPerson&&!viewOnly)cycle(k,quickPerson);else openDay(k);};
     w.appendChild(el);
   }
@@ -697,7 +699,7 @@ function renderCal(){
   const people=Object.fromEntries(state.people.map(p=>[p.id,p]));
   cells.forEach((c,i)=>{
     const wd=i%7;
-    if(wd===0){const lab=document.createElement('div');lab.className='rlab';lab.innerHTML=state.rooms.map(r=>`<div title="${esc(r.name)}" style="border-left:3px solid ${r.color};padding-left:2px"><span class="long">${esc(r.name)}</span><span class="short">${esc(r.name.slice(0,1))}</span></div>`).join('');cal.appendChild(lab);}
+    if(wd===0&&!viewOnly){const lab=document.createElement('div');lab.className='rlab';lab.innerHTML=state.rooms.map(r=>`<div title="${esc(r.name)}" style="border-left:3px solid ${r.color};padding-left:2px"><span class="long">${esc(r.name)}</span><span class="short">${esc(r.name.slice(0,1))}</span></div>`).join('');cal.appendChild(lab);}
     const el=document.createElement('button');
     el.className='cell d'+wd+(c.out?' out':'');
     if(c.out){el.innerHTML=`<span class="num">${c.d}</span>`;el.disabled=true;cal.appendChild(el);return;}
@@ -705,7 +707,7 @@ function renderCal(){
     if(k===todayKey)el.classList.add('today');
     el.setAttribute('aria-label',`${m+1}월 ${c.d}일 ${DOW[wd]}요일`);
     let html=`<span class="num">${c.d}</span>`;
-    html+='<span class="lanes">'+state.rooms.map(r=>{const {cover,out}=laneState(r.id,k);let b='';
+    if(!viewOnly)html+='<span class="lanes">'+state.rooms.map(r=>{const {cover,out}=laneState(r.id,k);let b='';
       const kindCls=x=>x.kind==='work'?'work':(x.nights>=2?'multi':'single');
       if(cover){const isIn=cover.start===k;const isEnd=bookingEnd(cover)===addDays(k,1);const cls=kindCls(cover)+(isIn?' in':'')+(isEnd?' end':'');
         const txt=isIn?(cover.kind==='work'?`공사 ${cover.nights}일`:cover.nights>=2?`연박 ${cover.nights}박`:'입실'):'';
@@ -819,7 +821,7 @@ function openDayView(k){
   const rooms=state.rooms.map(r=>{const {cover}=laneState(r.id,k);const t=!cover?'공실':cover.kind==='work'?'공사':cover.nights>=2?`연박 ${cover.nights}박${cover.start===k?' (입실)':''}`:'입실';return `<span class="tag" style="background:${r.color};color:#1f2430;font-size:12px;padding:3px 8px">${esc(r.name)} ${t}</span>`;}).join(' ');
   openSheet(`<h2>${mo}월 ${d}일 (${DOW[wd]})</h2>
     <div class="sub">휴무</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${offs}</div>
-    <div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>
+    ${viewOnly?'':`<div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>`}
     ${day.memo?`<div class="msg">메모: ${esc(day.memo)}</div>`:''}
     <div class="actions"><button class="btn" id="dvSwap">🔁 이 날 휴무 교환</button><button class="btn primary" id="dvClose">닫기</button></div>`);
   $('#dvClose').onclick=closeSheet;$('#dvSwap').onclick=()=>openSwap(k);
@@ -1227,7 +1229,7 @@ function monthText(){
   st.forEach(r=>{L.push('',`■ ${r.p.name}(${WORK[r.p.work].label})  휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}`);
     if(r.off.length)L.push(`  휴무: ${f(r.off)}`);if(r.annual.length)L.push(`  연차: ${f(r.annual)}`);if(r.extra.length)L.push(`  추가: ${f(r.extra)}`);});
   const rl=state.rooms.map(r=>{const ins=monthKeys(view.y,view.m).map(k=>{const {cover}=laneState(r.id,k);return cover&&cover.start===k?`${parseInt(k.slice(8),10)}일 ${cover.kind==='work'?'공사':cover.nights>=2?'연박':'입실'} ${cover.nights}박`:null;}).filter(Boolean);return ins.length?`${r.name}: ${ins.join(', ')}`:null;}).filter(Boolean);
-  if(rl.length)L.push('',...rl);
+  if(rl.length&&!viewOnly)L.push('',...rl);
   const memos=monthKeys(view.y,view.m).filter(k=>getDay(k).memo).map(k=>`${parseInt(k.slice(8),10)}일 ${getDay(k).memo}`);
   if(memos.length)L.push('',...memos);
   return L.join('\n');
@@ -1366,7 +1368,7 @@ async function renderCalendarImage(){
   try{await document.fonts.ready;}catch(e){}
   const {y,m}=view;const n=dim(y,m),first=dow(y,m,1);const weeks=Math.ceil((first+n)/7);
   const font='"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif';
-  const W=1080,M=28,LW=44,cw=(W-M*2-LW)/7,scale=2,LH=18,R=state.rooms.length;
+  const showR=!viewOnly;const W=1080,M=28,LW=showR?44:0,cw=(W-M*2-LW)/7,scale=2,LH=18,R=showR?state.rooms.length:0;
   const INK='#1f2430',MUTED='#6b7484',LINE='#d9dfe8',SUN='#c8322b',SAT='#2b5fb8';
   const TAGC={stay:'#8e7ad8',work:'#e8955a',empty:'#8f9bb0'};
   const rowsInfo=[];for(let w=0;w<weeks;w++){let maxChips=0,anyMemo=false;for(let c=0;c<7;c++){const d=w*7+c-first+1;if(d<1||d>n)continue;const day=getDay(key(y,m,d));maxChips=Math.max(maxChips,Object.keys(day.off).length);if(day.memo)anyMemo=true;}
@@ -1384,15 +1386,15 @@ async function renderCalendarImage(){
   ctx.strokeStyle=LINE;ctx.lineWidth=1;
   let yy=top;
   for(let w=0;w<weeks;w++){const rh=rowsInfo[w].h;
-    ctx.fillStyle='#f4f6f9';ctx.fillRect(M,yy,LW,rh);ctx.strokeRect(M+.5,yy+.5,LW,rh);
-    state.rooms.forEach((r,ri)=>{ctx.fillStyle=r.color;ctx.fillRect(M+2,yy+36+ri*(LH+3),3,LH);ctx.fillStyle=MUTED;ctx.font='bold 11px '+font;let nm=r.name;while(ctx.measureText(nm).width>LW-10&&nm.length>1)nm=nm.slice(0,-1);ctx.fillText(nm,M+8,yy+36+ri*(LH+3)+13);});
+    if(showR){ctx.fillStyle='#f4f6f9';ctx.fillRect(M,yy,LW,rh);ctx.strokeRect(M+.5,yy+.5,LW,rh);}
+    if(showR)state.rooms.forEach((r,ri)=>{ctx.fillStyle=r.color;ctx.fillRect(M+2,yy+36+ri*(LH+3),3,LH);ctx.fillStyle=MUTED;ctx.font='bold 11px '+font;let nm=r.name;while(ctx.measureText(nm).width>LW-10&&nm.length>1)nm=nm.slice(0,-1);ctx.fillText(nm,M+8,yy+36+ri*(LH+3)+13);});
     for(let c=0;c<7;c++){const x=M+LW+cw*c;const d=w*7+c-first+1;
       ctx.fillStyle=(d<1||d>n)?'#f4f6f9':'#ffffff';ctx.fillRect(x,yy,cw,rh);ctx.strokeRect(x+.5,yy+.5,cw,rh);
       if(d<1||d>n)continue;
       const k=key(y,m,d),day=getDay(k);let cy=yy+8;
       if(k===todayKey){ctx.fillStyle='#fff4d6';ctx.fillRect(x+1,yy+1,cw-1,rh-1);}
       ctx.fillStyle=c===0?SUN:c===6?SAT:INK;ctx.font='bold 17px '+font;ctx.fillText(String(d),x+8,cy+17);cy+=28;
-      state.rooms.forEach(r=>{const {cover,out}=laneState(r.id,k);const lx=x+1,lw=cw-2;
+      if(showR)state.rooms.forEach(r=>{const {cover,out}=laneState(r.id,k);const lx=x+1,lw=cw-2;
         const hatch=(bx,bw,col)=>{ctx.save();rr(ctx,bx,cy,bw,LH,4);ctx.clip();ctx.strokeStyle=col;ctx.lineWidth=2;for(let i=-LH;i<bw+LH;i+=7){ctx.beginPath();ctx.moveTo(bx+i,cy+LH);ctx.lineTo(bx+i+LH,cy);ctx.stroke();}ctx.restore();};
         const fillB=(b,bx,bw,rl,re)=>{const multi=b.nights>=2;ctx.save();ctx.beginPath();ctx.rect(bx,cy,bw,LH);ctx.clip();ctx.fillStyle=multi?'#f9c3c3':'#ffffff';const x0=rl?bx:bx-10,x1=re?bx+bw:bx+bw+10;rr(ctx,x0,cy,x1-x0,LH,7);ctx.fill();if(!multi){ctx.strokeStyle='#c9d1dc';ctx.lineWidth=1.5;ctx.stroke();}ctx.restore();};
         if(cover){const isIn=cover.start===k;const isEnd=bookingEnd(cover)===addDays(k,1);const bx=isIn?lx+3:lx;const bw=(isEnd?lx+lw-3:lx+lw)-bx;
@@ -1416,7 +1418,7 @@ async function renderCalendarImage(){
     ctx.fillStyle=r.p.color;rr(ctx,x,ty-13,16,16,8);ctx.fill();
     ctx.fillStyle=INK;ctx.font='bold 14px '+font;ctx.fillText(r.p.name,x+24,ty);
     ctx.fillStyle=MUTED;ctx.font='13px '+font;ctx.fillText(`${WORK[r.p.work].label} · 휴무 ${r.off.length}/${r.p.baseOff} · 연차 ${r.annual.length}/${r.p.annual}${r.extra.length?` · 추가 ${r.extra.length}`:''}${r.offLeft>0?` · ${r.offLeft}일 남음`:''}`,x+24+ctx.measureText(r.p.name).width+28,ty);});
-  yy+=sumRows*30+28;ctx.fillStyle=MUTED;ctx.font='12px '+font;ctx.fillText('객실 띠: 빨강 = 연박 · 흰색 = 입실(단박) · 빈칸 = 공실 · 주황 빗금 = 공사   |   직원: 색 채움 = 휴무 · 테두리 = 연차 · 점선 = 추가휴무',M,yy);
+  yy+=sumRows*30+28;ctx.fillStyle=MUTED;ctx.font='12px '+font;ctx.fillText((showR?'객실 띠: 빨강 = 연박 · 흰색 = 입실(단박) · 빈칸 = 공실 · 주황 빗금 = 공사   |   ':'')+'직원: 색 채움 = 휴무 · 테두리 = 연차 · 점선 = 추가휴무',M,yy);
   return new Promise(res=>cv.toBlob(b=>res(b),'image/png'));
 }
 async function openImage(){
