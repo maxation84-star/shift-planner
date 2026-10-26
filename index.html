@@ -126,9 +126,10 @@ button{cursor:pointer}
 .chip{font-size:11px;font-weight:600;padding:2px 6px;border-radius:5px;color:#1f2430;background:var(--pc);line-height:1.35;display:flex;align-items:center;gap:4px;min-width:0}
 .chip .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip[data-pid],.pchip{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+body.view-mode .chip[data-pid]{touch-action:auto;cursor:default}
 .chip.dragging{opacity:.35}
 .ghost{position:fixed;z-index:70;pointer-events:none;transform:translate(-50%,-120%);box-shadow:var(--shadow);font-size:13px;padding:5px 10px}
-.cell.drop{outline:3px solid var(--accent);outline-offset:-3px;background:var(--accent-soft)}
+.cell.drop,.wday.drop{outline:3px solid var(--accent);outline-offset:-3px;background:var(--accent-soft)}
 .cell.drop-del{outline:3px dashed var(--bad);outline-offset:-3px}
 .chip .k{margin-left:auto;font-size:9px;background:rgba(0,0,0,.12);padding:0 4px;border-radius:3px;flex:none}
 .chip.annual{background:transparent;color:var(--ink);border:2px solid var(--pc)}
@@ -677,9 +678,10 @@ function renderWeek(){
     const rooms=state.rooms.map(r=>{const {cover}=laneState(r.id,k);const cls=!cover?'vac':cover.kind==='work'?'work':cover.nights>=2?'multi':'single';
       const t=!cover?'공실':cover.kind==='work'?'공사':cover.nights>=2?(cover.start===k?`연박 ${cover.nights}박`:'연박'):'입실';
       return `<span class="wr ${cls}" style="--rc:${r.color}">${esc(r.name)} ${t}</span>`;}).join('');
-    const offs=state.people.filter(p=>day.off[p.id]).map(p=>`<span class="chip ${day.off[p.id]}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span></span>`).join('');
+    const offs=state.people.filter(p=>day.off[p.id]).map(p=>`<span class="chip ${day.off[p.id]}" data-pid="${p.id}" data-t="${day.off[p.id]}" style="--pc:${p.color}"><span class="n">${esc(p.name)}</span></span>`).join('');
     el.innerHTML=`<div class="wdate"><b>${d}</b><span>${DOW[i]}</span></div><div class="wbody">${viewOnly?'':`<div class="wrooms">${rooms}</div>`}<div class="woffs">${offs||'<span class="none">휴무 없음</span>'}</div>${day.memo?`<div class="memo">${esc(day.memo)}</div>`:''}</div>`;
     el.onclick=()=>{if(suppressClick)return;if(quickPerson&&!viewOnly)cycle(k,quickPerson);else openDay(k);};
+    el.querySelectorAll('.chip[data-pid]').forEach(ch=>ch.addEventListener('pointerdown',e=>startDrag(e,ch.dataset.pid,ch.dataset.t,k,ch)));
     w.appendChild(el);
   }
 }
@@ -744,7 +746,7 @@ function startDrag(e,pid,type,from,el){
 function dragTarget(d,x,y){
   const g=d.ghost;if(g)g.hidden=true;
   const t=document.elementFromPoint(x,y);if(g)g.hidden=false;
-  if(!t)return null;const cell=t.closest('.cell');
+  if(!t)return null;const cell=t.closest('.cell,.wday');
   return cell&&cell.dataset.k?cell:null;
 }
 document.addEventListener('pointermove',e=>{
@@ -1462,7 +1464,7 @@ initCloud();
 render();
 if(viewOnly)applyViewMode();
 /* ---------- 자동 업데이트: 배포 버전이 바뀌면 스스로 새로 고침 ---------- */
-const APP_VERSION='a66abd6';
+const APP_VERSION='2760b6f';
 let swReg=null;
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
   try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;}).catch(()=>{});
