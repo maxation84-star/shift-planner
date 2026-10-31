@@ -367,11 +367,11 @@ const WORK={w6:{label:'주6일',off:4},w5:{label:'주5일',off:8}};
 const DEFAULT_PEOPLE=[['허나경','w6'],['홍기범','w6'],['김경숙','w5'],['김규선','w6'],['전희원','w6'],['서수정','w6'],['김정민','w6'],['박태선','w6'],['용태중','w5'],['김은정','w6']];
 function defaultState(){
   return {version:1,people:DEFAULT_PEOPLE.map(([name,w],i)=>({id:'p'+(i+1),name,color:PALETTE[i%PALETTE.length],work:w,baseOff:WORK[w].off,annual:1})),
-    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[]},settings:{weekend:'satsun'},days:{}};
+    rooms:DEFAULT_ROOMS.map((name,i)=>({id:'r'+(i+1),name,color:ROOM_PALETTE[i]})),bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[],guest:'67b81b2bd6202c105a383b50cdd5cadd62ad2733203f9b6d99eb01f71247d106'},settings:{weekend:'satsun'},days:{}};
 }
 function normalize(s){
   if(!s||typeof s!=='object')return defaultState();
-  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[]},settings:{weekend:'satsun'},days:{}};
+  const out={version:1,people:[],rooms:[],bookings:[],requests:[],swaps:[],auth:{pins:{},admin:'',admins:[],guest:'67b81b2bd6202c105a383b50cdd5cadd62ad2733203f9b6d99eb01f71247d106'},settings:{weekend:'satsun'},days:{}};
   if(s.settings&&s.settings.weekend==='frisat')out.settings.weekend='frisat';
   (Array.isArray(s.people)?s.people:[]).forEach((p,i)=>{
     if(!p)return;
@@ -405,6 +405,7 @@ function normalize(s){
   const a=s.auth&&typeof s.auth==='object'?s.auth:{};
   Object.keys(a.pins||{}).forEach(pid=>{if(pids.has(pid)&&hex(a.pins[pid]))out.auth.pins[pid]=a.pins[pid];});
   out.auth.admin=hex(a.admin);
+  out.auth.guest=hex(a.guest)||'67b81b2bd6202c105a383b50cdd5cadd62ad2733203f9b6d99eb01f71247d106';
   out.auth.admins=(Array.isArray(a.admins)?a.admins:Object.values(a.admins||{})).filter(pid=>pids.has(pid));
   (Array.isArray(s.bookings)?s.bookings:[]).forEach(b=>{
     if(!b||!rids.has(b.room)||!/^\d{4}-\d{2}-\d{2}$/.test(b.start||''))return;
@@ -893,21 +894,23 @@ function myId(){
   if(!h)return '';
   return tok===h?me:'';
 }
-function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}renderSwapBtn();renderMeBtn();evalMode();checkGate();}
+const GUEST_KEY='shiftplan.guestTok';
+function isGuest(){let t='';try{t=localStorage.getItem(GUEST_KEY)||'';}catch(e){}return !!t&&t===state.auth.guest;}
+function logout(){try{localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);localStorage.removeItem(GUEST_KEY);}catch(e){}renderSwapBtn();renderMeBtn();evalMode();checkGate();}
 function renderMeBtn(){
   const b=$('#meBtn');if(!(bin||fbUrl)||(!viewOnly&&!myId())){b.hidden=true;return;}
-  b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name+(state.auth.admins.includes(me)?' (관리자)':''):'👤 로그인';b.classList.toggle('adm',!!me&&state.auth.admins.includes(me));
+  b.hidden=false;const me=myId();b.textContent=me?'👤 '+state.people.find(p=>p.id===me).name+(state.auth.admins.includes(me)?' (관리자)':''):isGuest()?'👤 손님 (보기 전용)':'👤 로그인';b.classList.toggle('adm',!!me&&state.auth.admins.includes(me));
 }
 function pinField(id,label){return `<div class="field"><label for="${id}">${label}</label><input class="pin" id="${id}" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"></div>`;}
 function openLogin(then,forced){
   let me='';try{me=localStorage.getItem(MY_KEY)||'';}catch(e){}
   if(!state.people.some(p=>p.id===me))me='';
   const draw=()=>{
-    const has=me&&state.auth.pins[me];
-    openSheet(`<h2>${forced?'근무표 플래너 · 로그인':'로그인'}</h2><div class="sub">${forced?'달력을 보려면 로그인하세요. ':''}${me?(has?'비밀번호 4자리를 넣으세요.':'처음이시네요. 쓰실 비밀번호 4자리를 정하면 가입됩니다.'):'이름을 고르세요.'}</div>
-      <div class="field"><label for="lgWho">이름</label><select id="lgWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
-      ${me?(has?pinField('lgPin','비밀번호 4자리'):pinField('lgPin','새 비밀번호 4자리')+pinField('lgPin2','한 번 더')):''}
-      <div class="actions">${forced?'':'<button class="btn" id="lgClose">닫기</button>'}${me?`<button class="btn primary" id="lgGo">${has?'로그인':'가입하고 로그인'}</button>`:''}</div><div class="msg" id="lgMsg"></div>
+    const has=me&&me!=='__guest'&&state.auth.pins[me];
+    openSheet(`<h2>${forced?'근무표 플래너 · 로그인':'로그인'}</h2><div class="sub">${forced?'달력을 보려면 로그인하세요. ':''}${me==='__guest'?'보기 전용 비밀번호를 넣으세요.':me?(has?'비밀번호 4자리를 넣으세요.':'처음이시네요. 쓰실 비밀번호 4자리를 정하면 가입됩니다.'):'이름을 고르세요. 직원이 아니면 "손님 · 보기 전용"을 고르세요.'}</div>
+      <div class="field"><label for="lgWho">이름</label><select id="lgWho"><option value="">선택</option>${state.people.map(x=>`<option value="${x.id}" ${x.id===me?'selected':''}>${esc(x.name)}</option>`).join('')}<option value="__guest" ${me==='__guest'?'selected':''}>손님 · 보기 전용</option></select></div>
+      ${me==='__guest'?pinField('lgPin','보기 전용 비밀번호 4자리'):me?(has?pinField('lgPin','비밀번호 4자리'):pinField('lgPin','새 비밀번호 4자리')+pinField('lgPin2','한 번 더')):''}
+      <div class="actions">${forced?'':'<button class="btn" id="lgClose">닫기</button>'}${me?`<button class="btn primary" id="lgGo">${me==='__guest'?'보기 전용으로 들어가기':has?'로그인':'가입하고 로그인'}</button>`:''}</div><div class="msg" id="lgMsg"></div>
       ${has?'<div class="msg">비밀번호를 잊었으면 담당자에게 초기화를 부탁하세요.</div>':''}${forced?`<div class="msg">담당자는 주소 뒤에 #edit 를 붙여 여세요.</div>`:''}`);
     $('#sheet').dataset.gate=forced?'1':'';
     const lc=$('#lgClose');if(lc)lc.onclick=closeSheet;
@@ -916,6 +919,7 @@ function openLogin(then,forced){
     const go=$('#lgGo');if(go)go.onclick=async()=>{
       const v=$('#lgPin').value;const bad=m=>{$('#lgMsg').className='msg bad';$('#lgMsg').textContent=m;};
       if(!/^\d{4}$/.test(v))return bad('숫자 4자리여야 합니다.');
+      if(me==='__guest'){const gh=await pinHash('guest',v);if(gh!==state.auth.guest)return bad('비밀번호가 맞지 않습니다.');try{localStorage.setItem(GUEST_KEY,gh);localStorage.removeItem(MY_KEY);localStorage.removeItem(TOK_KEY);}catch(e){}closeSheet();renderSwapBtn();renderMeBtn();evalMode();checkGate();toast('보기 전용으로 들어왔습니다');return;}
       const h=await pinHash(me,v);
       if(has){if(h!==state.auth.pins[me])return bad('비밀번호가 맞지 않습니다.');}
       else{if($('#lgPin2').value!==v)return bad('두 번 넣은 비밀번호가 다릅니다.');
@@ -930,12 +934,14 @@ function openLogin(then,forced){
 /* 로그인 전에는 화면 잠금 (공유 연결된 보기 모드에서) */
 let gateLocked=false;
 function checkGate(){
-  const need=(bin||fbUrl)&&!cloudRef&&viewOnly&&!myId();
+  const need=(bin||fbUrl)&&!cloudRef&&viewOnly&&!myId()&&!isGuest();
   if(need&&!gateLocked){gateLocked=true;document.body.classList.add('locked');if(!(wantEdit&&!adminOk()))openLogin(null,true);}
   else if(!need&&gateLocked){gateLocked=false;document.body.classList.remove('locked');if(!$('#overlay').hidden&&$('#sheet').dataset.gate==='1')closeSheet();}
 }
 function openAccount(){
-  const me=myId();if(!me)return openLogin();
+  const me=myId();
+  if(!me&&isGuest()){openSheet(`<h2>👤 손님 (보기 전용)</h2><div class="sub">달력을 보기만 할 수 있습니다. 직원이면 로그아웃 후 본인 이름으로 로그인하세요.</div><div class="actions"><button class="btn" id="acClose">닫기</button><button class="btn danger" id="acOut">로그아웃</button></div>`);$('#acClose').onclick=closeSheet;$('#acOut').onclick=()=>{logout();closeSheet();toast('로그아웃했습니다');};return;}
+  if(!me)return openLogin();
   openSheet(`<h2>👤 ${pname(me)}</h2><div class="sub">이 폰은 ${pname(me)}님으로 로그인되어 있습니다.</div>
     <div class="actions"><button class="btn" id="acClose">닫기</button><button class="btn danger" id="acOut">로그아웃</button></div>`);
   $('#acClose').onclick=closeSheet;$('#acOut').onclick=()=>{logout();closeSheet();toast('로그아웃했습니다');};
@@ -995,7 +1001,8 @@ function applySwap(st,w){
 function revertSwap(st,w){const t={id:w.id,a:w.a,aDate:w.bDate,b:w.b,bDate:w.aDate};return applySwap(st,t);}
 function renderSwapBtn(){
   const b=$('#swapBtn');if(!viewOnly){b.hidden=true;return;}
-  b.hidden=false;const me=myId();const n=state.swaps.filter(w=>w.status==='pending'&&w.b===me).length;
+  const me=myId();if(!me&&isGuest()){b.hidden=true;return;}
+  b.hidden=false;const n=state.swaps.filter(w=>w.status==='pending'&&w.b===me).length;
   b.innerHTML='🔁 휴무 교환'+(n?`<span class="badge">${n}</span>`:'');
 }
 function futureOffs(pid){return Object.keys(state.days).filter(k=>state.days[k].off[pid]&&k>=todayKey).sort().slice(0,60);}
@@ -1464,7 +1471,7 @@ initCloud();
 render();
 if(viewOnly)applyViewMode();
 /* ---------- 자동 업데이트: 배포 버전이 바뀌면 스스로 새로 고침 ---------- */
-const APP_VERSION='2760b6f';
+const APP_VERSION='b2038b5';
 let swReg=null;
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
   try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;}).catch(()=>{});
