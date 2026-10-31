@@ -1,5 +1,5 @@
-// 근무표 플래너 - 오프라인 캐시. 배포마다 캐시 이름이 바뀌어(b2038b5) 새 버전이 바로 적용된다.
-const CACHE = 'shiftplan-b2038b5';
+// 근무표 플래너 - 오프라인 캐시. 배포마다 캐시 이름이 바뀌어(8d1cf42) 새 버전이 바로 적용된다.
+const CACHE = 'shiftplan-8d1cf42';
 const FILES = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES).catch(() => {})).then(() => self.skipWaiting()));

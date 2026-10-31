@@ -837,8 +837,8 @@ function openDayView(k){
     <div class="sub">휴무</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${offs}</div>
     ${viewOnly?'':`<div class="sub">객실</div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${rooms}</div>`}
     ${day.memo?`<div class="msg">메모: ${esc(day.memo)}</div>`:''}
-    <div class="actions"><button class="btn" id="dvSwap">🔁 이 날 휴무 교환</button><button class="btn primary" id="dvClose">닫기</button></div>`);
-  $('#dvClose').onclick=closeSheet;$('#dvSwap').onclick=()=>openSwap(k);
+    <div class="actions">${(!myId()&&isGuest())?'':'<button class="btn" id="dvSwap">🔁 이 날 휴무 교환</button>'}<button class="btn primary" id="dvClose">닫기</button></div>`);
+  $('#dvClose').onclick=closeSheet;const dsw=$('#dvSwap');if(dsw)dsw.onclick=()=>openSwap(k);
 }
 const MY_KEY='shiftplan.me';
 function fmtK(k){if(!k)return '없음';const [y,m,d]=k.split('-').map(Number);return `${m}/${d}(${DOW[dow(y,m-1,d)]})`;}
@@ -1471,7 +1471,7 @@ initCloud();
 render();
 if(viewOnly)applyViewMode();
 /* ---------- 자동 업데이트: 배포 버전이 바뀌면 스스로 새로 고침 ---------- */
-const APP_VERSION='b2038b5';
+const APP_VERSION='8d1cf42';
 let swReg=null;
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
   try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;}).catch(()=>{});
