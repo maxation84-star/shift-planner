@@ -16,5 +16,6 @@ jobs:
           DB=$(python3 -c 'import json;print(json.load(open("share.json")).get("db",""))')
           ADMIN=$(python3 -c 'import json;print(json.load(open("auth-update.json"))["auth"]["admin"])')
           ADMINS=$(python3 -c 'import json;print(json.dumps(json.load(open("auth-update.json"))["auth"].get("admins",[])))')
-          curl -sS -m 30 -X PATCH "$DB/auth.json" -H 'Content-Type: application/json' -d "{\"admin\":\"$ADMIN\",\"admins\":$ADMINS}"; echo
+          GUEST=$(python3 -c 'import json;print(json.load(open("auth-update.json"))["auth"].get("guest",""))')
+          curl -sS -m 30 -X PATCH "$DB/auth.json" -H 'Content-Type: application/json' -d "{\"admin\":\"$ADMIN\",\"admins\":$ADMINS,\"guest\":\"$GUEST\"}"; echo
           echo "== verify"; curl -sS -m 30 "$DB/auth.json"; echo
