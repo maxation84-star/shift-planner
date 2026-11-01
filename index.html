@@ -1471,7 +1471,7 @@ initCloud();
 render();
 if(viewOnly)applyViewMode();
 /* ---------- 자동 업데이트: 배포 버전이 바뀌면 스스로 새로 고침 ---------- */
-const APP_VERSION='95ae3a8';
+const APP_VERSION='8d4a2f5';
 let swReg=null;
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!window.claude){
   try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{swReg=r;}).catch(()=>{});
